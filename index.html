@@ -1,0 +1,1352 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3D魔塔</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --panel-bg: rgba(10,10,20,0.92);
+    --text: #cdd6f4;
+    --accent: #f5c842;
+    --danger: #f38ba8;
+    --blue: #89b4fa;
+    --green: #a6e3a1;
+    --border: rgba(255,255,255,0.08);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: var(--bg);
+    overflow: hidden;
+    font-family: 'PingFang SC','Microsoft YaHei',sans-serif;
+    color: var(--text);
+    user-select: none;
+    -webkit-user-select: none;
+    height: 100vh;
+    width: 100vw;
+  }
+  canvas { display:block; }
+  #hud {
+    position: fixed; top: 16px; left: 16px;
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 20px;
+    min-width: 200px;
+    backdrop-filter: blur(12px);
+    z-index: 10;
+    pointer-events: none;
+  }
+  #hud .floor { font-size: 14px; color: var(--accent); margin-bottom: 8px; font-weight:600; }
+  #hud .stat { display:flex; justify-content:space-between; padding:3px 0; font-size:13px; }
+  #hud .stat .val { font-weight:600; }
+  #hud .hp .val { color: var(--danger); }
+  #hud .atk .val { color: #fab387; }
+  #hud .def .val { color: var(--blue); }
+  #hud .gold .val { color: var(--accent); }
+  #hud .keys { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); display:flex; gap:12px; font-size:12px; }
+  #hud .key { display:flex; align-items:center; gap:4px; }
+  .key-dot { width:10px; height:10px; border-radius:50%; }
+  .key-dot.yellow { background:#f5c842; box-shadow:0 0 6px #f5c842; }
+  .key-dot.blue { background:#89b4fa; box-shadow:0 0 6px #89b4fa; }
+  .key-dot.red { background:#f38ba8; box-shadow:0 0 6px #f38ba8; }
+
+  #minimap {
+    position: fixed; bottom: 16px; right: 16px;
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 8px;
+    z-index: 10;
+  }
+  #minimap canvas { display:block; border-radius: 6px; }
+
+  #battle-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+    backdrop-filter: blur(4px);
+  }
+  #battle-overlay.active { display: flex; }
+  #battle-panel {
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px 32px;
+    min-width: 320px;
+    text-align: center;
+  }
+  #battle-panel h3 { font-size: 18px; margin-bottom: 4px; }
+  #battle-panel .monster-name { color: var(--accent); font-size: 15px; margin-bottom: 16px; }
+  #battle-panel .calc { font-size: 13px; color: #9399b2; margin-bottom: 6px; }
+  #battle-panel .loss { font-size: 20px; color: var(--danger); font-weight: 700; margin: 12px 0; }
+  #battle-panel .remain { font-size: 13px; color: #9399b2; margin-bottom: 20px; }
+  #battle-panel .btn-row { display:flex; gap:12px; justify-content:center; }
+  #battle-panel button {
+    padding: 10px 28px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+  #battle-panel .btn-fight { background: #f38ba8; color: #1e1e2e; border-color: #f38ba8; font-weight:600; }
+  #battle-panel .btn-fight:hover { background: #f06280; }
+  #battle-panel .btn-retreat { background: transparent; color: var(--text); }
+  #battle-panel .btn-retreat:hover { background: rgba(255,255,255,0.05); }
+
+  #message {
+    position: fixed; bottom: 80px; left: 50%;
+    transform: translateX(-50%);
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 20px;
+    font-size: 13px;
+    z-index: 20;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+  #message.show { opacity: 1; }
+  #message.warn { color: var(--danger); border-color: var(--danger); }
+
+  #victory-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.85);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 200;
+    flex-direction: column;
+    gap: 16px;
+  }
+  #victory-overlay.active { display: flex; }
+  #victory-overlay h1 { font-size: 36px; color: var(--accent); }
+  #victory-overlay p { color: var(--text); font-size: 15px; }
+
+  #controls-hint {
+    position: fixed; bottom: 16px; left: 16px;
+    font-size: 11px; color: #585b70;
+    z-index: 10;
+    pointer-events: none;
+  }
+  #floor-transition {
+    position: fixed; inset: 0;
+    background: #000;
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 150;
+    font-size: 28px;
+    color: var(--accent);
+  }
+</style>
+</head>
+<body>
+
+<div id="hud">
+  <div class="floor" id="floor-label">第 1 层</div>
+  <div class="stat hp"><span>❤️ 生命</span><span class="val" id="hp-val">400</span></div>
+  <div class="stat atk"><span>⚔️ 攻击</span><span class="val" id="atk-val">10</span></div>
+  <div class="stat def"><span>🛡️ 防御</span><span class="val" id="def-val">10</span></div>
+  <div class="stat gold"><span>💰 金币</span><span class="val" id="gold-val">0</span></div>
+  <div class="keys">
+    <div class="key"><span class="key-dot yellow"></span> <span id="yk-val">1</span></div>
+    <div class="key"><span class="key-dot blue"></span> <span id="bk-val">0</span></div>
+    <div class="key"><span class="key-dot red"></span> <span id="rk-val">0</span></div>
+  </div>
+</div>
+
+<div id="minimap"><canvas id="minimap-canvas" width="132" height="132"></canvas></div>
+<div id="controls-hint">方向键/WASD 移动 · 鼠标拖拽旋转 · 滚轮缩放 · R 重置视角</div>
+
+<div id="battle-overlay">
+  <div id="battle-panel">
+    <h3>⚔️ 遭遇战斗</h3>
+    <div class="monster-name" id="battle-monster-name"></div>
+    <div class="calc" id="battle-calc"></div>
+    <div class="loss" id="battle-loss"></div>
+    <div class="remain" id="battle-remain"></div>
+    <div class="btn-row">
+      <button class="btn-fight" id="btn-fight">战斗</button>
+      <button class="btn-retreat" id="btn-retreat">撤退</button>
+    </div>
+  </div>
+</div>
+
+<div id="message"></div>
+<div id="floor-transition">⬆ 进入第 N 层</div>
+<div id="victory-overlay">
+  <h1>🏆 通关！</h1>
+  <p>你击败了魔王，拯救了公主！</p>
+  <button class="btn-fight" onclick="location.reload()" style="font-size:14px;padding:10px 28px;border-radius:8px;cursor:pointer;background:#f38ba8;color:#1e1e2e;border:none;font-weight:600;">重新开始</button>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ============================================================
+// GAME DATA
+// ============================================================
+
+const TILE = { FLOOR:0, WALL:1, YELLOW_DOOR:2, BLUE_DOOR:3, RED_DOOR:4, STAIR_UP:9 };
+const SIZE = 11; // 11x11 grid
+
+// Monster definitions: [name, hp, atk, def, gold, color]
+const MONSTER_DB = {
+  1: { name:'绿色史莱姆', hp:50,  atk:20, def:1,  gold:1,  color:0x44cc44 },
+  2: { name:'红色史莱姆', hp:70,  atk:15, def:2,  gold:2,  color:0xcc3333 },
+  3: { name:'小蝙蝠',     hp:100, atk:20, def:5,  gold:3,  color:0x666688 },
+  4: { name:'骷髅兵',     hp:150, atk:40, def:10, gold:8,  color:0xcccccc },
+  5: { name:'骷髅法师',   hp:120, atk:60, def:8,  gold:10, color:0x8888cc },
+  6: { name:'初级守卫',   hp:200, atk:50, def:20, gold:15, color:0xff8833 },
+  7: { name:'石像鬼',     hp:400, atk:80, def:30, gold:50, color:0xff2222 },
+};
+
+// Item types
+const ITEM = {
+  RED_GEM: 'rg', BLUE_GEM: 'bg', RED_POTION: 'rp', BLUE_POTION: 'bp',
+  YELLOW_KEY: 'yk', BLUE_KEY: 'bk', RED_KEY: 'rk',
+};
+
+// 5 floor maps (11x11). 0=floor,1=wall,2=yellow door,3=blue door,4=red door,9=stair up
+const MAPS = [
+  // Floor 0 (1F) - Tutorial
+  [
+    [1,1,1,1,1,1,1,1,1,1,1],
+    [1,0,0,0,0,1,0,0,0,0,1],
+    [1,0,1,0,1,0,0,0,1,0,1],
+    [1,0,1,0,0,2,0,0,1,0,1],
+    [1,0,0,0,1,0,1,0,0,0,1],
+    [1,0,1,0,1,0,1,0,1,0,1],
+    [1,0,1,0,0,0,0,0,1,0,1],
+    [1,0,1,0,1,0,1,0,1,0,1],
+    [1,0,0,0,1,0,1,0,0,0,1],
+    [1,0,1,0,0,0,0,0,1,9,1],
+    [1,1,1,1,1,1,1,1,1,1,1],
+  ],
+  // Floor 1 (2F) - Blue doors introduced
+  [
+    [1,1,1,1,1,1,1,1,1,1,1],
+    [1,0,0,2,0,1,3,0,0,0,1],
+    [1,0,1,0,0,0,0,0,1,0,1],
+    [1,2,1,0,1,0,1,0,1,0,1],
+    [1,0,0,0,1,0,1,0,0,0,1],
+    [1,0,1,0,0,0,0,2,1,0,1],
+    [1,0,1,0,1,0,1,0,0,0,1],
+    [1,0,0,0,1,0,1,1,1,0,1],
+    [1,2,1,0,0,0,0,0,0,0,1],
+    [1,0,0,0,1,9,1,0,0,0,1],
+    [1,1,1,1,1,1,1,1,1,1,1],
+  ],
+  // Floor 2 (3F) - Harder enemies
+  [
+    [1,1,1,1,1,1,1,1,1,1,1],
+    [1,0,0,0,3,0,0,0,0,0,1],
+    [1,0,1,1,1,1,1,0,1,0,1],
+    [1,0,1,0,0,0,0,0,1,0,1],
+    [1,0,0,0,1,0,1,2,0,0,1],
+    [1,2,1,0,1,0,1,0,1,0,1],
+    [1,0,1,0,0,0,0,0,1,0,1],
+    [1,0,0,0,1,1,1,0,0,0,1],
+    [1,0,1,0,0,0,0,2,1,0,1],
+    [1,0,1,2,0,1,0,0,0,9,1],
+    [1,1,1,1,1,1,1,1,1,1,1],
+  ],
+  // Floor 3 (4F) - Hidden walls, harder
+  [
+    [1,1,1,1,1,1,1,1,1,1,1],
+    [1,0,0,0,0,1,1,0,0,0,1],
+    [1,0,1,1,0,0,0,0,1,0,1],
+    [1,0,0,0,0,1,0,0,1,0,1],
+    [1,1,1,0,1,0,4,0,0,0,1],
+    [1,0,0,0,0,0,1,1,1,0,1],
+    [1,0,1,1,1,0,0,0,0,0,1],
+    [1,0,0,0,0,2,1,0,1,0,1],
+    [1,0,1,0,1,0,0,0,1,0,1],
+    [1,0,0,0,0,0,1,0,0,9,1],
+    [1,1,1,1,1,1,1,1,1,1,1],
+  ],
+  // Floor 4 (5F) - Boss floor
+  [
+    [1,1,1,1,1,1,1,1,1,1,1],
+    [1,0,0,0,0,0,0,0,0,0,1],
+    [1,0,1,1,1,0,1,1,1,0,1],
+    [1,0,1,0,0,0,0,0,1,0,1],
+    [1,0,1,0,1,1,1,0,1,0,1],
+    [1,0,0,0,1,0,0,0,0,0,1],
+    [1,0,1,0,1,0,1,0,1,0,1],
+    [1,0,1,0,0,0,0,0,1,0,1],
+    [1,0,1,1,4,0,4,1,1,0,1],
+    [1,0,0,0,0,0,0,0,0,0,1],
+    [1,1,1,1,1,1,1,1,1,1,1],
+  ],
+];
+
+// Monsters per floor: [monsterType, x, y]
+const MONSTERS = [
+  // 1F
+  [
+    [1,1,1],[1,2,1],[1,3,1], // 3 green slimes in corridor
+    [2,7,1],[2,8,2],          // red slimes
+    [1,9,5],                   // green slime
+  ],
+  // 2F
+  [
+    [2,3,1],[2,1,1],           // red slimes
+    [3,6,1],[3,8,6],           // bats
+    [1,5,7],[1,9,1],           // green slimes
+    [4,1,5],                   // skeleton
+  ],
+  // 3F
+  [
+    [3,1,3],[3,3,3],           // bats
+    [4,1,7],[4,7,5],           // skeletons
+    [5,5,3],[5,9,3],           // skeleton mages
+    [2,3,9],                   // red slime
+  ],
+  // 4F
+  [
+    [4,1,1],[4,9,1],           // skeletons
+    [5,1,9],[5,5,5],           // mages
+    [6,3,4],[6,7,4],[6,5,8],   // guards
+    [3,3,9],                   // bat
+  ],
+  // 5F - Boss
+  [
+    [6,1,1],[6,1,3],[6,3,1],   // guards
+    [5,8,3],[5,9,5],[5,7,5],   // mages
+    [4,9,1],                   // skeleton
+    [7,4,5],                   // BOSS stone golem
+  ],
+];
+
+// Items per floor: [itemType, x, y]
+const ITEMS = [
+  // 1F
+  [
+    ['rg',1,3],  // red gem
+    ['rp',8,1],  // red potion
+    ['yk',3,5],  // yellow key
+    ['yk',9,1],  // yellow key
+    ['yk',4,9],  // yellow key
+    ['bk',7,9],  // blue key (hidden behind wall)
+  ],
+  // 2F
+  [
+    ['bg',4,1],  // blue gem
+    ['rp',1,3],  // red potion
+    ['bp',9,8],  // blue potion
+    ['yk',7,7],  // yellow key
+    ['yk',2,9],  // yellow key
+    ['yk',3,3],  // yellow key
+    ['bk',8,1],  // blue key
+  ],
+  // 3F
+  [
+    ['rg',1,1],['rg',9,1],      // red gems
+    ['bg',1,5],['bg',7,9],      // blue gems
+    ['rp',3,7],['rp',5,9],      // red potions
+    ['bp',1,9],                  // blue potion
+    ['yk',4,1],['yk',7,1],['yk',9,7], // yellow keys
+    ['bk',5,5],                  // blue key
+    ['rk',4,4],                  // red key
+  ],
+  // 4F
+  [
+    ['rg',8,1],['rg',3,7],      // red gems
+    ['bg',1,3],['bg',7,7],      // blue gems
+    ['rp',5,1],['rp',3,3],      // red potions
+    ['bp',7,1],                  // blue potion
+    ['yk',1,5],['yk',9,7],['yk',3,9],['yk',9,9], // yellow keys
+    ['bk',5,3],                  // blue key
+    ['rk',6,8],                  // red key
+  ],
+  // 5F
+  [
+    ['rg',7,1],['rg',9,7],      // red gems
+    ['bg',1,7],['bg',7,7],      // blue gems
+    ['rp',3,3],['rp',5,7],      // red potions
+    ['bp',9,9],                  // blue potion
+    ['yk',1,5],['yk',3,9],      // yellow keys
+    ['bk',5,3],                  // blue key
+    ['rk',9,3],                  // red key
+  ],
+];
+
+// Hidden walls: [floor, x, y] - these LOOK like walls but are passable
+const HIDDEN_WALLS = [
+  [0, 3, 4], // 1F: hidden passage to blue key area
+  [3, 3, 3], // 4F: secret room entrance
+  [3, 5, 6], // 4F: another hidden path
+];
+
+// Player start per floor (when going up): [x, y]
+const FLOOR_START = [
+  [1,1],
+  [1,9],
+  [1,1],
+  [1,1],
+  [1,1],
+];
+
+// ============================================================
+// GAME STATE
+// ============================================================
+
+const state = {
+  hp: 400,
+  maxHp: 400,
+  atk: 10,
+  def: 10,
+  gold: 0,
+  yellowKeys: 1,
+  blueKeys: 0,
+  redKeys: 0,
+  floor: 0,
+  px: 1,
+  py: 1,
+};
+
+// Runtime state per floor (cleared on floor change)
+let currentMonsters = [];
+let currentItems = [];
+let defeatedThisFloor = new Set();
+
+// ============================================================
+// THREE.JS SETUP
+// ============================================================
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0a14);
+scene.fog = new THREE.Fog(0x0a0a14, 8, 30);
+
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.5, 60);
+camera.position.set(8, 12, 14);
+camera.lookAt(SIZE/2, 0, SIZE/2);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.2;
+document.body.appendChild(renderer.domElement);
+
+// Lighting
+const ambientLight = new THREE.AmbientLight(0x334466, 2.5);
+scene.add(ambientLight);
+
+const dirLight = new THREE.DirectionalLight(0xffeedd, 6);
+dirLight.position.set(8, 15, 5);
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.set(1024, 1024);
+dirLight.shadow.camera.near = 0.5;
+dirLight.shadow.camera.far = 50;
+dirLight.shadow.camera.left = -15;
+dirLight.shadow.camera.right = 15;
+dirLight.shadow.camera.top = 15;
+dirLight.shadow.camera.bottom = -15;
+dirLight.shadow.bias = -0.0001;
+scene.add(dirLight);
+
+// Point light following player
+const playerLight = new THREE.PointLight(0xffcc99, 15, 6);
+scene.add(playerLight);
+
+// Floor base
+const floorGeo = new THREE.PlaneGeometry(SIZE, SIZE);
+const floorMat = new THREE.MeshStandardMaterial({ color: 0x2a2a38, roughness: 0.7, metalness: 0.1 });
+const floorMesh = new THREE.Mesh(floorGeo, floorMat);
+floorMesh.rotation.x = -Math.PI/2;
+floorMesh.position.set(SIZE/2, -0.05, SIZE/2);
+floorMesh.receiveShadow = true;
+scene.add(floorMesh);
+
+// Grid lines on floor
+const gridHelper = new THREE.PolarGridHelper(SIZE/2, SIZE, SIZE, 64, 0x444466, 0x444466);
+gridHelper.position.set(SIZE/2, 0.01, SIZE/2);
+scene.add(gridHelper);
+
+// Group for dynamic objects
+const dynGroup = new THREE.Group();
+scene.add(dynGroup);
+
+// ============================================================
+// MATERIALS CACHE
+// ============================================================
+
+const matWall = new THREE.MeshStandardMaterial({ color: 0x3a3a4a, roughness: 0.85, metalness: 0.05 });
+const matYellowDoor = new THREE.MeshStandardMaterial({ color: 0xf5c842, roughness: 0.3, metalness: 0.4, transparent:true, opacity:0.7 });
+const matBlueDoor = new THREE.MeshStandardMaterial({ color: 0x89b4fa, roughness: 0.3, metalness: 0.4, transparent:true, opacity:0.7 });
+const matRedDoor = new THREE.MeshStandardMaterial({ color: 0xf38ba8, roughness: 0.3, metalness: 0.4, transparent:true, opacity:0.7 });
+const matPlayer = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.2, emissive:0x333333, emissiveIntensity:0.5 });
+const matStair = new THREE.MeshStandardMaterial({ color: 0xf5c842, roughness: 0.2, metalness: 0.8, emissive:0x886600, emissiveIntensity:1.5 });
+
+// Gem materials
+const matRedGem = new THREE.MeshStandardMaterial({ color: 0xff3333, roughness: 0.15, metalness: 0.3, emissive:0x660000, emissiveIntensity:1.5 });
+const matBlueGem = new THREE.MeshStandardMaterial({ color: 0x3388ff, roughness: 0.15, metalness: 0.3, emissive:0x001144, emissiveIntensity:1.5 });
+const matRedPotion = new THREE.MeshStandardMaterial({ color: 0xcc2222, roughness: 0.2, metalness: 0.5, emissive:0x440000, emissiveIntensity:1.0 });
+const matBluePotion = new THREE.MeshStandardMaterial({ color: 0x2244cc, roughness: 0.2, metalness: 0.5, emissive:0x000044, emissiveIntensity:1.0 });
+const matKey = new THREE.MeshStandardMaterial({ color: 0xdddd44, roughness: 0.2, metalness: 0.7, emissive:0x332200, emissiveIntensity:0.8 });
+
+// ============================================================
+// MESH REFERENCES (for animation and cleanup)
+// ============================================================
+
+let playerMesh = null;
+let doorMeshes = {}; // "x,y" -> mesh
+let monsterMeshes = {}; // "x,y" -> {mesh, type}
+let itemMeshes = {}; // "x,y" -> {mesh, type}
+let stairMesh = null;
+let wallMeshes = {};
+
+// ============================================================
+// HELPER: world position from grid coords
+// ============================================================
+
+function gridToWorld(gx, gy) {
+  return new THREE.Vector3(gx + 0.5, 0, gy + 0.5);
+}
+
+function key(x, y) { return `${x},${y}`; }
+
+// ============================================================
+// IS HIDDEN WALL?
+// ============================================================
+
+function isHiddenWall(floor, x, y) {
+  return HIDDEN_WALLS.some(([f, hx, hy]) => f === floor && hx === x && hy === y);
+}
+
+// ============================================================
+// BUILD SCENE FOR CURRENT FLOOR
+// ============================================================
+
+function buildFloor() {
+  // Clear dynamic objects
+  while (dynGroup.children.length > 0) {
+    dynGroup.remove(dynGroup.children[0]);
+  }
+  doorMeshes = {};
+  monsterMeshes = {};
+  itemMeshes = {};
+  stairMesh = null;
+  wallMeshes = {};
+
+  const map = MAPS[state.floor];
+  const floor = state.floor;
+
+  const wallGeo = new THREE.BoxGeometry(0.95, 1.6, 0.95);
+  const doorGeo = new THREE.BoxGeometry(0.85, 1.3, 0.15);
+  const half = 0.5;
+
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+      const tile = map[y][x];
+      const pos = gridToWorld(x, y);
+      pos.y = 0.5;
+
+      if (tile === TILE.WALL) {
+        // Check if it's a hidden wall
+        if (isHiddenWall(floor, x, y)) {
+          // Hidden wall: darker, slightly different look
+          const hwMat = new THREE.MeshStandardMaterial({ color: 0x2a2a3a, roughness: 0.9, metalness: 0.05, transparent:true, opacity: 0.85 });
+          const mesh = new THREE.Mesh(wallGeo, hwMat);
+          mesh.position.copy(pos);
+          mesh.position.y = 0.8;
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+          dynGroup.add(mesh);
+          wallMeshes[key(x,y)] = mesh;
+        } else {
+          const mesh = new THREE.Mesh(wallGeo, matWall);
+          mesh.position.copy(pos);
+          mesh.position.y = 0.8;
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+          dynGroup.add(mesh);
+          wallMeshes[key(x,y)] = mesh;
+        }
+      } else if (tile === TILE.YELLOW_DOOR) {
+        const mesh = new THREE.Mesh(doorGeo, matYellowDoor);
+        mesh.position.set(pos.x, 0.65, pos.z);
+        mesh.castShadow = true;
+        dynGroup.add(mesh);
+        doorMeshes[key(x,y)] = { mesh, type: 'yellow' };
+      } else if (tile === TILE.BLUE_DOOR) {
+        const mesh = new THREE.Mesh(doorGeo, matBlueDoor);
+        mesh.position.set(pos.x, 0.65, pos.z);
+        mesh.castShadow = true;
+        dynGroup.add(mesh);
+        doorMeshes[key(x,y)] = { mesh, type: 'blue' };
+      } else if (tile === TILE.RED_DOOR) {
+        const mesh = new THREE.Mesh(doorGeo, matRedDoor);
+        mesh.position.set(pos.x, 0.65, pos.z);
+        mesh.castShadow = true;
+        dynGroup.add(mesh);
+        doorMeshes[key(x,y)] = { mesh, type: 'red' };
+      } else if (tile === TILE.STAIR_UP) {
+        const stairGeo = new THREE.TorusGeometry(0.35, 0.1, 8, 16);
+        const mesh = new THREE.Mesh(stairGeo, matStair);
+        mesh.position.set(pos.x, 0.3, pos.z);
+        mesh.rotation.x = -Math.PI/2;
+        mesh.castShadow = true;
+        dynGroup.add(mesh);
+        stairMesh = mesh;
+
+        // Glow ring
+        const glowGeo = new THREE.RingGeometry(0.3, 0.45, 32);
+        const glowMat = new THREE.MeshBasicMaterial({ color:0xf5c842, side:THREE.DoubleSide, transparent:true, opacity:0.4 });
+        const glow = new THREE.Mesh(glowGeo, glowMat);
+        glow.position.set(pos.x, 0.15, pos.z);
+        glow.rotation.x = -Math.PI/2;
+        dynGroup.add(glow);
+        stairMesh.glow = glow;
+      }
+
+      // Floor tile decoration
+      if (tile !== TILE.WALL) {
+        const tileGeo = new THREE.PlaneGeometry(0.9, 0.9);
+        const tileMat = new THREE.MeshStandardMaterial({
+          color: tile === TILE.STAIR_UP ? 0x3a3a30 : 0x2a2a38,
+          roughness: 0.8, metalness: 0.05
+        });
+        const tileMesh = new THREE.Mesh(tileGeo, tileMat);
+        tileMesh.rotation.x = -Math.PI/2;
+        tileMesh.position.set(pos.x, 0.01, pos.z);
+        tileMesh.receiveShadow = true;
+        dynGroup.add(tileMesh);
+      }
+    }
+  }
+
+  // Spawn monsters
+  const mDefs = MONSTERS[floor] || [];
+  currentMonsters = [];
+  for (const [type, mx, my] of mDefs) {
+    if (defeatedThisFloor.has(key(mx, my))) continue;
+    const mData = MONSTER_DB[type];
+    const mesh = createMonsterMesh(mData, mx, my);
+    dynGroup.add(mesh);
+    monsterMeshes[key(mx, my)] = { mesh, type, data: mData };
+    currentMonsters.push({ type, x: mx, y: my, data: mData });
+  }
+
+  // Spawn items
+  const iDefs = ITEMS[floor] || [];
+  currentItems = [];
+  for (const [itype, ix, iy] of iDefs) {
+    const mesh = createItemMesh(itype, ix, iy);
+    dynGroup.add(mesh);
+    itemMeshes[key(ix, iy)] = { mesh, type: itype };
+    currentItems.push({ type: itype, x: ix, y: iy });
+  }
+
+  // Create player
+  createPlayerMesh();
+
+  updateHUD();
+  updateMinimap();
+}
+
+function createMonsterMesh(mData, mx, my) {
+  const group = new THREE.Group();
+  const pos = gridToWorld(mx, my);
+
+  // Body
+  const bodyGeo = new THREE.SphereGeometry(0.32, 12, 10);
+  const bodyMat = new THREE.MeshStandardMaterial({ color: mData.color, roughness: 0.4, metalness: 0.2, emissive:mData.color, emissiveIntensity:0.3 });
+  const body = new THREE.Mesh(bodyGeo, bodyMat);
+  body.position.y = 0.4;
+  body.castShadow = true;
+  group.add(body);
+
+  // Eyes
+  const eyeGeo = new THREE.SphereGeometry(0.08, 6, 6);
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
+  eyeL.position.set(-0.1, 0.48, -0.28);
+  group.add(eyeL);
+  const eyeR = new THREE.Mesh(eyeGeo, eyeMat);
+  eyeR.position.set(0.1, 0.48, -0.28);
+  group.add(eyeR);
+
+  // Pupils
+  const pupilGeo = new THREE.SphereGeometry(0.04, 4, 4);
+  const pupilMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+  const pupilL = new THREE.Mesh(pupilGeo, pupilMat);
+  pupilL.position.set(-0.1, 0.48, -0.33);
+  group.add(pupilL);
+  const pupilR = new THREE.Mesh(pupilGeo, pupilMat);
+  pupilR.position.set(0.1, 0.48, -0.33);
+  group.add(pupilR);
+
+  // Type-specific features
+  if (mData.name.includes('蝙蝠')) {
+    const wingGeo = new THREE.ConeGeometry(0.25, 0.2, 6);
+    const wingL = new THREE.Mesh(wingGeo, bodyMat);
+    wingL.position.set(-0.3, 0.45, 0);
+    wingL.rotation.z = Math.PI/2;
+    group.add(wingL);
+    const wingR = new THREE.Mesh(wingGeo, bodyMat);
+    wingR.position.set(0.3, 0.45, 0);
+    wingR.rotation.z = -Math.PI/2;
+    group.add(wingR);
+  }
+
+  // Floating animation data
+  group.userData = {
+    baseY: 0,
+    floatOffset: Math.random() * Math.PI * 2,
+    monsterType: mData.name,
+  };
+
+  group.position.set(pos.x, 0, pos.z);
+  return group;
+}
+
+function createItemMesh(itype, ix, iy) {
+  const group = new THREE.Group();
+  const pos = gridToWorld(ix, iy);
+
+  let mesh;
+  if (itype === ITEM.RED_GEM || itype === ITEM.BLUE_GEM) {
+    const gemGeo = new THREE.OctahedronGeometry(0.22, 0);
+    const mat = itype === ITEM.RED_GEM ? matRedGem : matBlueGem;
+    mesh = new THREE.Mesh(gemGeo, mat);
+    mesh.position.y = 0.35;
+  } else if (itype === ITEM.RED_POTION || itype === ITEM.BLUE_POTION) {
+    const potGeo = new THREE.CylinderGeometry(0.15, 0.18, 0.45, 8);
+    const mat = itype === ITEM.RED_POTION ? matRedPotion : matBluePotion;
+    mesh = new THREE.Mesh(potGeo, mat);
+    mesh.position.y = 0.28;
+  } else {
+    // Key
+    const keyGeo = new THREE.BoxGeometry(0.08, 0.3, 0.06);
+    mesh = new THREE.Mesh(keyGeo, matKey);
+    mesh.position.y = 0.25;
+  }
+
+  mesh.castShadow = true;
+  group.add(mesh);
+  group.position.set(pos.x, 0, pos.z);
+  group.userData = {
+    baseY: 0,
+    floatOffset: Math.random() * Math.PI * 2,
+  };
+  return group;
+}
+
+function createPlayerMesh() {
+  if (playerMesh) dynGroup.remove(playerMesh);
+  const group = new THREE.Group();
+  const pos = gridToWorld(state.px, state.py);
+
+  // Body
+  const bodyGeo = new THREE.BoxGeometry(0.35, 0.7, 0.25);
+  const body = new THREE.Mesh(bodyGeo, matPlayer);
+  body.position.y = 0.45;
+  body.castShadow = true;
+  group.add(body);
+
+  // Head
+  const headGeo = new THREE.SphereGeometry(0.18, 8, 8);
+  const head = new THREE.Mesh(headGeo, matPlayer);
+  head.position.y = 0.88;
+  head.castShadow = true;
+  group.add(head);
+
+  // Direction indicator (small triangle)
+  const triShape = new THREE.Shape();
+  triShape.moveTo(0, 0.2);
+  triShape.lineTo(-0.1, -0.1);
+  triShape.lineTo(0.1, -0.1);
+  triShape.closePath();
+  const triGeo = new THREE.ExtrudeGeometry(triShape, { depth:0.05, bevelEnabled:false });
+  const triMesh = new THREE.Mesh(triGeo, new THREE.MeshStandardMaterial({ color:0xff4444, emissive:0x440000, emissiveIntensity:1, roughness:0.2 }));
+  triMesh.position.set(0, 0.3, -0.2);
+  triMesh.name = 'indicator';
+  group.add(triMesh);
+
+  // Sword
+  const swordGeo = new THREE.BoxGeometry(0.05, 0.5, 0.05);
+  const sword = new THREE.Mesh(swordGeo, new THREE.MeshStandardMaterial({ color:0xcccccc, roughness:0.2, metalness:0.9 }));
+  sword.position.set(0.25, 0.5, 0);
+  sword.name = 'sword';
+  group.add(sword);
+
+  group.position.set(pos.x, 0, pos.z);
+  playerMesh = group;
+  dynGroup.add(group);
+}
+
+// ============================================================
+// BATTLE SYSTEM
+// ============================================================
+
+function calcBattle(monsterType) {
+  const m = MONSTER_DB[monsterType];
+  const pDmg = Math.max(state.atk - m.def, 0);
+  const mDmg = Math.max(m.atk - state.def, 0);
+  if (pDmg <= 0) return { canWin: false, rounds: Infinity, loss: Infinity, mDmg:0, pDmg:0 };
+  const rounds = Math.ceil(m.hp / pDmg);
+  const loss = rounds * mDmg;
+  return {
+    canWin: loss < state.hp,
+    rounds,
+    loss,
+    pDmg,
+    mDmg,
+    monster: m,
+  };
+}
+
+function showBattlePreview(mx, my) {
+  const info = monsterMeshes[key(mx, my)];
+  if (!info) return;
+  const result = calcBattle(info.type);
+
+  const overlay = document.getElementById('battle-overlay');
+  document.getElementById('battle-monster-name').textContent = info.data.name;
+  document.getElementById('battle-calc').textContent =
+    `你的伤害: ${result.pDmg}/回合 · 怪物伤害: ${result.mDmg}/回合 · 共 ${result.rounds} 回合`;
+
+  if (!result.canWin && result.pDmg <= 0) {
+    document.getElementById('battle-loss').textContent = '⚠️ 无法破防！';
+    document.getElementById('battle-remain').textContent = '你的攻击力不足以伤害这个怪物';
+    document.getElementById('btn-fight').style.display = 'none';
+  } else if (!result.canWin) {
+    document.getElementById('battle-loss').textContent = `你将损失 ${result.loss} HP`;
+    document.getElementById('battle-remain').textContent = `⚠️ 生命不足！剩余 HP: ${state.hp}`;
+    document.getElementById('btn-fight').style.display = 'none';
+  } else {
+    document.getElementById('battle-loss').textContent = `你将损失 ${result.loss} HP`;
+    document.getElementById('battle-remain').textContent = `战斗后剩余: ${state.hp - result.loss} HP`;
+    document.getElementById('btn-fight').style.display = '';
+  }
+
+  overlay.classList.add('active');
+  overlay._battleTarget = { x: mx, y: my };
+}
+
+function doBattle(mx, my) {
+  const info = monsterMeshes[key(mx, my)];
+  if (!info) return;
+  const result = calcBattle(info.type);
+  if (!result.canWin) return;
+
+  // Apply damage
+  state.hp -= result.loss;
+  state.gold += result.monster.gold;
+
+  // Remove monster
+  defeatedThisFloor.add(key(mx, my));
+  const mesh = info.mesh;
+  // Death animation: shrink and fade
+  const shrink = { scale: 1 };
+  const animId = setInterval(() => {
+    shrink.scale -= 0.08;
+    mesh.scale.setScalar(Math.max(shrink.scale, 0));
+    if (shrink.scale <= 0) {
+      clearInterval(animId);
+      dynGroup.remove(mesh);
+      delete monsterMeshes[key(mx, my)];
+    }
+  }, 30);
+
+  updateHUD();
+  updateMinimap();
+  showMessage(`击败了 ${info.data.name}！失去 ${result.loss} HP，获得 ${result.monster.gold} 金币`, false);
+
+  // Check death
+  if (state.hp <= 0) {
+    state.hp = 0;
+    updateHUD();
+    setTimeout(() => alert('💀 你倒下了...刷新页面重新开始。'), 500);
+  }
+}
+
+// ============================================================
+// MOVEMENT & INTERACTION
+// ============================================================
+
+let isMoving = false;
+
+function canWalk(x, y) {
+  const map = MAPS[state.floor];
+  if (x < 0 || x >= SIZE || y < 0 || y >= SIZE) return false;
+  const tile = map[y][x];
+
+  // Check for walls (including hidden walls)
+  if (tile === TILE.WALL && !isHiddenWall(state.floor, x, y)) return false;
+  // Hidden walls ARE walkable
+  if (tile === TILE.WALL && isHiddenWall(state.floor, x, y)) return true;
+
+  // Check doors
+  if (tile === TILE.YELLOW_DOOR && state.yellowKeys > 0) return 'yellow_door';
+  if (tile === TILE.BLUE_DOOR && state.blueKeys > 0) return 'blue_door';
+  if (tile === TILE.RED_DOOR && state.redKeys > 0) return 'red_door';
+  if (tile === TILE.YELLOW_DOOR || tile === TILE.BLUE_DOOR || tile === TILE.RED_DOOR) return 'locked';
+
+  // Check monsters
+  if (monsterMeshes[key(x, y)]) return 'monster';
+
+  if (tile === TILE.WALL) return false;
+  return true;
+}
+
+function moveTo(nx, ny) {
+  if (isMoving) return;
+  const walkResult = canWalk(nx, ny);
+
+  if (walkResult === false) return;
+
+  if (walkResult === 'locked') {
+    showMessage('🔒 没有对应的钥匙！', true);
+    return;
+  }
+
+  if (walkResult === 'monster') {
+    showBattlePreview(nx, ny);
+    return;
+  }
+
+  // Handle door opening
+  if (walkResult === 'yellow_door') {
+    state.yellowKeys--;
+    MAPS[state.floor][ny][nx] = TILE.FLOOR;
+    removeDoor(nx, ny);
+  } else if (walkResult === 'blue_door') {
+    state.blueKeys--;
+    MAPS[state.floor][ny][nx] = TILE.FLOOR;
+    removeDoor(nx, ny);
+  } else if (walkResult === 'red_door') {
+    state.redKeys--;
+    MAPS[state.floor][ny][nx] = TILE.FLOOR;
+    removeDoor(nx, ny);
+  }
+
+  // Move player
+  state.px = nx;
+  state.py = ny;
+  animateMove(nx, ny);
+
+  // Pickup items
+  pickupItems(nx, ny);
+
+  // Check stairs
+  checkStairs(nx, ny);
+
+  // Check hidden wall discovery
+  if (isHiddenWall(state.floor, nx, ny)) {
+    showMessage('🔍 发现了隐藏通道！', false);
+  }
+}
+
+function removeDoor(x, y) {
+  const dk = key(x, y);
+  if (doorMeshes[dk]) {
+    dynGroup.remove(doorMeshes[dk].mesh);
+    delete doorMeshes[dk];
+  }
+  showMessage('🔑 门已打开', false);
+}
+
+function pickupItems(x, y) {
+  const ik = key(x, y);
+  if (!itemMeshes[ik]) return;
+
+  const info = itemMeshes[ik];
+  const itype = info.type;
+  let msg = '';
+
+  switch (itype) {
+    case ITEM.RED_GEM:   state.atk += 3; msg = '获得红宝石！攻击力 +3'; break;
+    case ITEM.BLUE_GEM:  state.def += 3; msg = '获得蓝宝石！防御力 +3'; break;
+    case ITEM.RED_POTION:  state.hp = Math.min(state.hp + 100, state.maxHp); state.maxHp = Math.max(state.maxHp, state.hp); msg = '获得红血瓶！生命 +100'; break;
+    case ITEM.BLUE_POTION: state.hp = Math.min(state.hp + 500, state.maxHp); state.maxHp = Math.max(state.maxHp, state.hp); msg = '获得蓝血瓶！生命 +500'; break;
+    case ITEM.YELLOW_KEY: state.yellowKeys++; msg = '获得黄钥匙'; break;
+    case ITEM.BLUE_KEY:   state.blueKeys++; msg = '获得蓝钥匙'; break;
+    case ITEM.RED_KEY:    state.redKeys++; msg = '获得红钥匙'; break;
+  }
+
+  // Remove item from scene
+  const mesh = info.mesh;
+  const shrink = { scale: 1 };
+  const animId = setInterval(() => {
+    shrink.scale -= 0.1;
+    mesh.scale.setScalar(Math.max(shrink.scale, 0));
+    if (shrink.scale <= 0) {
+      clearInterval(animId);
+      dynGroup.remove(mesh);
+      delete itemMeshes[ik];
+    }
+  }, 20);
+
+  showMessage(msg, false);
+  updateHUD();
+  updateMinimap();
+}
+
+function checkStairs(x, y) {
+  const map = MAPS[state.floor];
+  if (map[y][x] === TILE.STAIR_UP) {
+    if (state.floor >= MAPS.length - 1) {
+      // Victory!
+      document.getElementById('victory-overlay').classList.add('active');
+      return;
+    }
+    goToFloor(state.floor + 1);
+  }
+}
+
+function goToFloor(newFloor) {
+  state.floor = newFloor;
+  const start = FLOOR_START[newFloor] || [1,1];
+  state.px = start[0];
+  state.py = start[1];
+  defeatedThisFloor = new Set();
+
+  // Transition animation
+  const trans = document.getElementById('floor-transition');
+  trans.textContent = `⬆ 进入第 ${newFloor + 1} 层`;
+  trans.style.display = 'flex';
+  setTimeout(() => { trans.style.display = 'none'; }, 800);
+
+  buildFloor();
+  showMessage(`进入第 ${newFloor + 1} 层`, false);
+}
+
+function animateMove(nx, ny) {
+  isMoving = true;
+  const target = gridToWorld(nx, ny);
+  const startPos = playerMesh.position.clone();
+  const startTime = performance.now();
+  const duration = 120;
+
+  function animate(now) {
+    const elapsed = now - startTime;
+    const t = Math.min(elapsed / duration, 1);
+    // Ease out
+    const ease = 1 - Math.pow(1 - t, 3);
+    playerMesh.position.lerpVectors(startPos, target, ease);
+    if (t < 1) {
+      requestAnimationFrame(animate);
+    } else {
+      playerMesh.position.copy(target);
+      isMoving = false;
+      updatePlayerLight();
+      updateMinimap();
+    }
+  }
+  requestAnimationFrame(animate);
+
+  // Bounce effect
+  const bounceStart = performance.now();
+  function bounce(now) {
+    const elapsed = now - bounceStart;
+    if (elapsed > duration) return;
+    const t = elapsed / duration;
+    const yOffset = Math.sin(t * Math.PI) * 0.3;
+    playerMesh.children.forEach(c => {
+      if (c.isMesh && c.position.y !== undefined) {
+        // Don't modify individual children's world position, modify group's y
+      }
+    });
+    playerMesh.position.y = yOffset;
+    if (elapsed < duration) requestAnimationFrame(bounce);
+    else playerMesh.position.y = 0;
+  }
+  requestAnimationFrame(bounce);
+}
+
+function updatePlayerLight() {
+  const pos = playerMesh.position;
+  playerLight.position.set(pos.x, 2, pos.z);
+}
+
+// ============================================================
+// UI
+// ============================================================
+
+function updateHUD() {
+  document.getElementById('floor-label').textContent = `第 ${state.floor + 1} 层`;
+  document.getElementById('hp-val').textContent = state.hp;
+  document.getElementById('atk-val').textContent = state.atk;
+  document.getElementById('def-val').textContent = state.def;
+  document.getElementById('gold-val').textContent = state.gold;
+  document.getElementById('yk-val').textContent = state.yellowKeys;
+  document.getElementById('bk-val').textContent = state.blueKeys;
+  document.getElementById('rk-val').textContent = state.redKeys;
+}
+
+function updateMinimap() {
+  const canvas = document.getElementById('minimap-canvas');
+  const ctx = canvas.getContext('2d');
+  const cs = 12; // cell size
+  ctx.clearRect(0, 0, 132, 132);
+
+  const map = MAPS[state.floor];
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+      const tile = map[y][x];
+      if (tile === TILE.WALL) {
+        if (isHiddenWall(state.floor, x, y)) {
+          ctx.fillStyle = '#2a2a3a';
+        } else {
+          ctx.fillStyle = '#1a1a2a';
+        }
+      } else if (tile === TILE.FLOOR || tile === TILE.STAIR_UP) {
+        ctx.fillStyle = '#2a2a38';
+      } else if (tile === TILE.YELLOW_DOOR) ctx.fillStyle = '#f5c842';
+      else if (tile === TILE.BLUE_DOOR) ctx.fillStyle = '#89b4fa';
+      else if (tile === TILE.RED_DOOR) ctx.fillStyle = '#f38ba8';
+      else ctx.fillStyle = '#333';
+      ctx.fillRect(x * cs, y * cs, cs, cs);
+
+      if (tile === TILE.STAIR_UP) {
+        ctx.fillStyle = '#f5c842';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('▲', x * cs + cs/2, y * cs + cs - 1);
+      }
+    }
+  }
+
+  // Draw monsters
+  for (const [mx, my, info] of Object.entries(monsterMeshes).map(([k,v]) => {
+    const [x,y] = k.split(',').map(Number);
+    return [x,y,v];
+  })) {
+    ctx.fillStyle = '#' + info.data.color.toString(16).padStart(6,'0');
+    ctx.beginPath();
+    ctx.arc(mx * cs + cs/2, my * cs + cs/2, 4, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  // Draw items
+  for (const ik of Object.keys(itemMeshes)) {
+    const [x,y] = ik.split(',').map(Number);
+    const itype = itemMeshes[ik].type;
+    if (itype === ITEM.RED_GEM) ctx.fillStyle = '#ff3333';
+    else if (itype === ITEM.BLUE_GEM) ctx.fillStyle = '#3388ff';
+    else if (itype === ITEM.RED_POTION || itype === ITEM.BLUE_POTION) ctx.fillStyle = '#cc2222';
+    else ctx.fillStyle = '#dddd44';
+    ctx.fillRect(x * cs + 4, y * cs + 4, 4, 4);
+  }
+
+  // Draw player
+  ctx.fillStyle = '#ffffff';
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(state.px * cs + cs/2, state.py * cs + cs/2, 5, 0, Math.PI*2);
+  ctx.fill();
+  ctx.stroke();
+}
+
+function showMessage(text, isWarn) {
+  const el = document.getElementById('message');
+  el.textContent = text;
+  el.className = isWarn ? 'show warn' : 'show';
+  clearTimeout(el._timeout);
+  el._timeout = setTimeout(() => { el.className = ''; }, 2000);
+}
+
+// ============================================================
+// INPUT
+// ============================================================
+
+const keys = {};
+window.addEventListener('keydown', e => {
+  keys[e.key] = true;
+  handleInput();
+});
+window.addEventListener('keyup', e => { keys[e.key] = false; });
+
+function handleInput() {
+  if (isMoving) return;
+  if (document.getElementById('battle-overlay').classList.contains('active')) return;
+  if (document.getElementById('victory-overlay').classList.contains('active')) return;
+
+  let dx = 0, dy = 0;
+  if (keys['ArrowUp'] || keys['w'] || keys['W']) dy = -1;
+  else if (keys['ArrowDown'] || keys['s'] || keys['S']) dy = 1;
+  else if (keys['ArrowLeft'] || keys['a'] || keys['A']) dx = -1;
+  else if (keys['ArrowRight'] || keys['d'] || keys['D']) dx = 1;
+  else if (keys['r'] || keys['R']) { resetCamera(); keys['r'] = false; keys['R'] = false; return; }
+
+  if (dx === 0 && dy === 0) return;
+
+  // Clear key immediately to prevent repeated moves
+  keys['ArrowUp'] = keys['w'] = keys['W'] = false;
+  keys['ArrowDown'] = keys['s'] = keys['S'] = false;
+  keys['ArrowLeft'] = keys['a'] = keys['A'] = false;
+  keys['ArrowRight'] = keys['d'] = keys['D'] = false;
+
+  moveTo(state.px + dx, state.py + dy);
+}
+
+// Battle panel buttons
+document.getElementById('btn-fight').addEventListener('click', () => {
+  const overlay = document.getElementById('battle-overlay');
+  const target = overlay._battleTarget;
+  if (target) {
+    doBattle(target.x, target.y);
+  }
+  overlay.classList.remove('active');
+  overlay._battleTarget = null;
+});
+
+document.getElementById('btn-retreat').addEventListener('click', () => {
+  const overlay = document.getElementById('battle-overlay');
+  overlay.classList.remove('active');
+  overlay._battleTarget = null;
+});
+
+// Keyboard control for battle panel
+window.addEventListener('keydown', (e) => {
+  const overlay = document.getElementById('battle-overlay');
+  if (overlay.classList.contains('active')) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      document.getElementById('btn-fight').click();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      document.getElementById('btn-retreat').click();
+    }
+  }
+});
+
+// Click to move (raycasting)
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+window.addEventListener('click', (e) => {
+  const overlay = document.getElementById('battle-overlay');
+  if (overlay.classList.contains('active')) return;
+  if (isMoving) return;
+  if (e.target.tagName === 'BUTTON' || e.target.closest('#hud') || e.target.closest('#minimap')) return;
+
+  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+
+  const intersects = raycaster.intersectObjects(dynGroup.children, true);
+  if (intersects.length > 0) {
+    const point = intersects[0].point;
+    const gx = Math.floor(point.x);
+    const gy = Math.floor(point.z);
+    if (gx >= 0 && gx < SIZE && gy >= 0 && gy < SIZE) {
+      // Simple path: just try to move directly if adjacent
+      if (Math.abs(gx - state.px) + Math.abs(gy - state.py) === 1) {
+        moveTo(gx, gy);
+      }
+    }
+  }
+});
+
+// Camera controls
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(SIZE/2, 0, SIZE/2);
+controls.enableDamping = true;
+controls.dampingFactor = 0.1;
+controls.minDistance = 5;
+controls.maxDistance = 25;
+controls.maxPolarAngle = Math.PI/2 - 0.1;
+controls.minPolarAngle = 0.3;
+controls.mouseButtons = {
+  LEFT: THREE.MOUSE.ROTATE,
+  MIDDLE: THREE.MOUSE.PAN,
+  RIGHT: THREE.MOUSE.PAN,
+};
+controls.update();
+
+function resetCamera() {
+  controls.target.set(SIZE/2, 0, SIZE/2);
+  camera.position.set(8, 12, 14);
+  camera.lookAt(SIZE/2, 0, SIZE/2);
+  controls.update();
+}
+
+// Resize
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ============================================================
+// GAME LOOP
+// ============================================================
+
+const clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  const dt = Math.min(clock.getDelta(), 0.1);
+  const time = performance.now() * 0.001;
+
+  controls.update();
+
+  // Float items
+  for (const mesh of Object.values(itemMeshes)) {
+    const ud = mesh.mesh.userData;
+    mesh.mesh.position.y = Math.sin(time * 2.5 + ud.floatOffset) * 0.1 + 0.1;
+    mesh.mesh.rotation.y += dt * 1.2;
+  }
+
+  // Float monsters slightly
+  for (const info of Object.values(monsterMeshes)) {
+    const ud = info.mesh.userData;
+    info.mesh.position.y = Math.sin(time * 2 + ud.floatOffset) * 0.06;
+  }
+
+  // Stair rotation
+  if (stairMesh) {
+    stairMesh.rotation.z += dt * 1.5;
+    if (stairMesh.glow) {
+      stairMesh.glow.material.opacity = 0.3 + Math.sin(time * 3) * 0.15;
+    }
+  }
+
+  updatePlayerLight();
+  renderer.render(scene, camera);
+}
+
+// ============================================================
+// INIT
+// ============================================================
+
+buildFloor();
+updatePlayerLight();
+animate();
+
+// Block repeated keypress
+setInterval(() => {
+  if (Object.values(keys).some(v => v)) handleInput();
+}, 150);
+
+console.log('🏰 3D魔塔已就绪 | 方向键/WASD移动 | 鼠标拖拽旋转 | 滚轮缩放');
+console.log(`当前: 第${state.floor+1}层 | HP:${state.hp} ATK:${state.atk} DEF:${state.def}`);
+</script>
+</body>
+</html>
