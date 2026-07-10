@@ -144,6 +144,21 @@
   #victory-overlay h1 { font-size: 36px; color: var(--accent); }
   #victory-overlay p { color: var(--text); font-size: 15px; }
 
+    #seed-panel {
+    position: fixed; bottom: 28px; left: 185px;
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 10px;
+    z-index: 10;
+    font-size: 11px;
+    display: flex; gap: 8px; align-items: center;
+    pointer-events: auto;
+  }
+  #seed-panel .seed-label { color: #9399b2; }
+  #seed-panel .seed-val { color: var(--accent); font-family: monospace; font-size: 12px; font-weight: 600; }
+  #seed-panel .seed-hint { color: #585b70; font-size: 10px; }
+
   #controls-hint {
     position: fixed; bottom: 10px; left: 185px;
     font-size: 10px; color: #585b70;
@@ -186,6 +201,13 @@
 </div>
 
 <div id="minimap"><canvas id="minimap-canvas" width="132" height="132"></canvas></div>
+
+<div id="seed-panel">
+  <span class="seed-label">🎲 种子</span>
+  <span class="seed-val" id="seed-display">----</span>
+  <span class="seed-hint">按 G 重新生成</span>
+</div>
+
 <div id="controls-hint">方向键/WASD 移动 · 鼠标拖拽旋转 · 滚轮缩放 · R 重置视角</div>
 
 <div id="battle-overlay">
@@ -248,7 +270,7 @@ const ITEM = {
 };
 
 // 5 floor maps (11x11). 0=floor,1=wall,2=yellow door,3=blue door,4=red door,9=stair up
-const MAPS = [
+let MAPS = [
   // Floor 0 (1F)
   [
     [1,1,1,1,1,1,1,1,1,1,1],
@@ -326,7 +348,7 @@ const MAPS = [
 ];
 
 // Monsters per floor: [monsterType, x, y]
-const MONSTERS = [
+let MONSTERS = [
   [[1,3,3],[1,7,5],[1,8,8],[2,4,8],[2,8,5],[1,1,8]],
   [[2,7,8],[2,1,4],[3,4,5],[3,4,2],[1,6,4],[1,3,5],[4,1,6]],
   [[3,4,8],[3,8,4],[4,8,1],[4,7,1],[5,8,7],[5,3,6],[2,5,1]],
@@ -335,7 +357,7 @@ const MONSTERS = [
 ];
 
 // Items per floor: [itemType, x, y]
-const ITEMS = [
+let ITEMS = [
   [['rg',3,4],['rp',7,4],['yk',9,1],['yk',1,4],['bk',5,7]],
   [['bg',3,1],['rg',9,2],['rp',7,2],['bp',4,6],['yk',3,2],['yk',9,6],['yk',2,4],['bk',9,4]],
   [['rg',7,6],['rg',5,6],['rg',5,4],['bg',1,7],['bg',5,8],['bg',3,3],['rp',9,2],['rp',1,3],['rp',3,4],['bp',2,4],['bp',3,5],['yk',3,7],['yk',3,8],['yk',9,3],['bk',2,7],['bk',6,6],['rk',7,7]],
@@ -343,8 +365,196 @@ const ITEMS = [
   [['rg',8,5],['rg',7,5],['rg',8,9],['bg',1,4],['bg',5,7],['bg',9,3],['rp',5,9],['rp',7,3],['rp',3,7],['bp',2,1],['bp',5,6],['yk',9,6],['yk',7,4],['yk',6,1],['bk',9,8],['rk',5,3]]
 ];
 
+
+// ============================================================
+// RANDOM MAP GENERATOR
+// ============================================================
+
+function hashStr(s) {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return h >>> 0;
+}
+
+function createRNG(seed) {
+  let s = hashStr(String(seed));
+  return function() {
+    s |= 0; s = s + 0x6D2B79F5 | 0;
+    let t = Math.imul(s ^ s >>> 15, 1 | s);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+function generateFloor(rng, floorNum) {
+  // Create map: border walls + interior
+  const map = Array.from({length:SIZE}, () => Array(SIZE).fill(0));
+  for (let i = 0; i < SIZE; i++) {
+    map[0][i] = map[SIZE-1][i] = map[i][0] = map[i][SIZE-1] = 1;
+  }
+
+  // Interior wall density increases per floor
+  const density = 0.18 + floorNum * 0.06;
+  for (let y = 1; y < SIZE-1; y++) {
+    for (let x = 1; x < SIZE-1; x++) {
+      if (rng() < density) map[y][x] = 1;
+    }
+  }
+
+  // Pick stair position (must be floor, away from start)
+  const floorTiles = [];
+  for (let y = 1; y < SIZE-1; y++)
+    for (let x = 1; x < SIZE-1; x++)
+      if (map[y][x] === 0 && (Math.abs(x-1)+Math.abs(y-1) > 4))
+        floorTiles.push([x,y]);
+
+  const stairIdx = Math.floor(rng() * floorTiles.length);
+  const [sx, sy] = floorTiles[stairIdx];
+  map[sy][sx] = 9;
+
+  // BFS to ensure path from (1,1) to stair exists
+  ensurePath(map, 1, 1, sx, sy, rng);
+
+  // Place doors (1-2 per floor) at chokepoints
+  const doors = placeDoors(map, rng, floorNum);
+
+  // Gather all walkable tiles
+  const walkable = [];
+  for (let y = 1; y < SIZE-1; y++)
+    for (let x = 1; x < SIZE-1; x++)
+      if (map[y][x] === 0) walkable.push([x,y]);
+
+  // Remove start and stair from placement pool
+  const pool = walkable.filter(([x,y]) => !(x===1&&y===1) && !(x===sx&&y===sy));
+
+  // Place monsters (fewer on floor 0, more on higher floors)
+  const monsterCount = 3 + floorNum * 2;
+  const monsters = [];
+  const usedPositions = new Set();
+  const mTypes = floorNum === 4 ? [4,5,6,7] : floorNum >= 2 ? [2,3,4,5] : floorNum >= 1 ? [1,2,3,4] : [1,2];
+  for (let i = 0; i < monsterCount && pool.length > 0; i++) {
+    const idx = Math.floor(rng() * pool.length);
+    const [mx, my] = pool.splice(idx, 1)[0];
+    const mType = mTypes[Math.floor(rng() * mTypes.length)];
+    monsters.push([mType, mx, my]);
+  }
+
+  // Place items on remaining tiles
+  const itemDefs = [
+    ['rg','bg','rp','bp','yk','yk','yk','bk'],
+    ['rg','bg','rp','bp','yk','yk','yk','bk'],
+    ['rg','rg','bg','bg','rp','rp','bp','yk','yk','yk','bk','rk'],
+    ['rg','rg','bg','bg','rp','rp','bp','bp','yk','yk','yk','yk','bk','bk','rk'],
+    ['rg','rg','rg','bg','bg','bg','rp','rp','rp','bp','bp','yk','yk','yk','bk','rk'],
+  ];
+  const items = [];
+  const defs = itemDefs[Math.min(floorNum, 4)];
+  for (let i = 0; i < defs.length && pool.length > 0; i++) {
+    const idx = Math.floor(rng() * pool.length);
+    const [ix, iy] = pool.splice(idx, 1)[0];
+    items.push([defs[i], ix, iy]);
+  }
+
+  // Hidden walls (1-2 per floor)
+  const hiddenWalls = [];
+  if (floorNum >= 1 && rng() < 0.7) {
+    const wallTiles = [];
+    for (let y = 2; y < SIZE-2; y++)
+      for (let x = 2; x < SIZE-2; x++)
+        if (map[y][x] === 1) wallTiles.push([x,y]);
+    if (wallTiles.length > 0) {
+      const idx = Math.floor(rng() * wallTiles.length);
+      hiddenWalls.push([floorNum, wallTiles[idx][0], wallTiles[idx][1]]);
+    }
+  }
+
+  return { map, monsters, items, hiddenWalls };
+}
+
+function ensurePath(map, sx, sy, ex, ey, rng) {
+  // BFS from start - if stair unreachable, punch holes through walls
+  const visited = Array.from({length:SIZE}, () => Array(SIZE).fill(false));
+  const queue = [[sx, sy]];
+  visited[sy][sx] = true;
+  const dirs = [[0,-1],[0,1],[-1,0],[1,0]];
+
+  while (queue.length > 0) {
+    const [cx, cy] = queue.shift();
+    for (const [dx, dy] of dirs) {
+      const nx = cx + dx, ny = cy + dy;
+      if (nx < 0 || nx >= SIZE || ny < 0 || ny >= SIZE) continue;
+      if (visited[ny][nx]) continue;
+      if (map[ny][nx] === 1) continue;
+      visited[ny][nx] = true;
+      queue.push([nx, ny]);
+    }
+  }
+
+  // If stair not reachable, greedily punch through walls towards it
+  if (!visited[ey][ex]) {
+    let cx = sx, cy = sy;
+    const maxSteps = 100;
+    for (let step = 0; step < maxSteps && !(cx===ex&&cy===ey); step++) {
+      // Move towards target
+      const dx = Math.sign(ex - cx);
+      const dy = Math.sign(ey - cy);
+      let moved = false;
+      for (const [ddx, ddy] of [[dx,0],[0,dy],[dx,dy]]) {
+        const nx = cx + ddx, ny = cy + ddy;
+        if (nx >= 1 && nx < SIZE-1 && ny >= 1 && ny < SIZE-1) {
+          if (map[ny][nx] === 1) { map[ny][nx] = 0; moved = true; cx = nx; cy = ny; break; }
+          if (ddx!==0||ddy!==0) { cx = nx; cy = ny; moved = true; break; }
+        }
+      }
+      if (!moved) break;
+    }
+    // Also punch through stair position if it's wall
+    if (map[ey][ex] !== 9) map[ey][ex] = 9;
+  }
+}
+
+function placeDoors(map, rng, floorNum) {
+  const numDoors = 1 + Math.floor(rng() * 2);
+  const doors = [];
+  for (let i = 0; i < numDoors; i++) {
+    // Find floor tiles with walls on opposite sides (natural chokepoint)
+    const candidates = [];
+    for (let y = 2; y < SIZE-2; y++) {
+      for (let x = 2; x < SIZE-2; x++) {
+        if (map[y][x] !== 0) continue;
+        const nWall = y>0 && map[y-1][x]===1;
+        const sWall = y<SIZE-1 && map[y+1][x]===1;
+        const eWall = x<SIZE-1 && map[y][x+1]===1;
+        const wWall = x>0 && map[y][x-1]===1;
+        if ((nWall&&sWall) || (eWall&&wWall)) candidates.push([x,y]);
+      }
+    }
+    if (candidates.length === 0) break;
+    const idx = Math.floor(rng() * candidates.length);
+    const [dx, dy] = candidates.splice(idx, 1)[0];
+    const doorType = floorNum >= 3 ? (rng() < 0.3 ? 4 : rng() < 0.5 ? 3 : 2) :
+                     floorNum >= 1 ? (rng() < 0.5 ? 3 : 2) : 2;
+    map[dy][dx] = doorType;
+  }
+  return doors;
+}
+
+function generateAllMaps(seed) {
+  const rng = createRNG(seed);
+  const maps = [], monsters = [], items = [], allHidden = [], starts = [];
+  for (let f = 0; f < 5; f++) {
+    const floor = generateFloor(rng, f);
+    maps.push(floor.map);
+    monsters.push(floor.monsters);
+    items.push(floor.items);
+    allHidden.push(...floor.hiddenWalls);
+    starts.push(f === 1 ? [1, SIZE-2] : [1, 1]);
+  }
+  return { maps, monsters, items, hiddenWalls: allHidden, floorStart: starts };
+}
+
 // Hidden walls LOOK like walls but are passable (must align with WALL tiles in maps)
-const HIDDEN_WALLS = [
+let HIDDEN_WALLS = [
   [0, 4, 4], // 1F: secret passage through central wall
   [2, 2, 2], // 3F: shortcut behind pillar
   [3, 5, 3], // 4F: hidden entrance to treasure room
@@ -352,7 +562,7 @@ const HIDDEN_WALLS = [
 ];
 
 // Player start per floor (when going up): [x, y]
-const FLOOR_START = [
+let FLOOR_START = [
   [1,1],  // 1F
   [1,9],  // 2F
   [1,1],  // 3F
@@ -387,6 +597,7 @@ let defeatedThisFloor = new Set();
 const inventory = []; // collected item icons
 const history = [];   // last N log entries
 const MAX_HISTORY = 8;
+let pendingAnimFrames = []; // track requestAnimationFrame IDs for cleanup
 
 // ============================================================
 // THREE.JS SETUP
@@ -513,9 +724,10 @@ function buildFloor() {
   const map = MAPS[state.floor];
   const floor = state.floor;
 
-  // Low pillars — wider footprint, visible at current camera height
-  const wallGeo = new THREE.BoxGeometry(0.38, 0.75, 0.38);
-  const doorGeo = new THREE.BoxGeometry(0.85, 0.35, 0.12);
+  // Wall blocks — thick enough to connect with adjacent walls
+  const wallGeo = new THREE.BoxGeometry(0.92, 0.75, 0.92);
+  const doorGeoH = new THREE.BoxGeometry(0.85, 0.35, 0.10); // E-W passage door
+  const doorGeoV = new THREE.BoxGeometry(0.10, 0.35, 0.85); // N-S passage door
   const half = 0.5;
 
   for (let y = 0; y < SIZE; y++) {
@@ -538,31 +750,29 @@ function buildFloor() {
           mesh.position.set(pos.x, 0.38, pos.z);
           mesh.castShadow = true;
           // Top cap
-          const capGeo = new THREE.BoxGeometry(0.42, 0.06, 0.42);
+          const capGeo = new THREE.BoxGeometry(0.95, 0.06, 0.95);
           const cap = new THREE.Mesh(capGeo, matWall);
           cap.position.y = 0.41;
           mesh.add(cap);
           dynGroup.add(mesh);
           wallMeshes[key(x,y)] = mesh;
         }
-      } else if (tile === TILE.YELLOW_DOOR) {
-        const mesh = new THREE.Mesh(doorGeo, matYellowDoor);
+      } else if (tile === TILE.YELLOW_DOOR || tile === TILE.BLUE_DOOR || tile === TILE.RED_DOOR) {
+        // Detect door orientation: N-S passage vs E-W passage
+        const nWalk = y>0 && (map[y-1][x]===0||map[y-1][x]===9||isHiddenWall(floor,x,y-1));
+        const sWalk = y<SIZE-1 && (map[y+1][x]===0||map[y+1][x]===9||isHiddenWall(floor,x,y+1));
+        const isNS = nWalk && sWalk;
+        const geo = isNS ? doorGeoV : doorGeoH;
+        let mat;
+        if (tile === TILE.YELLOW_DOOR) mat = matYellowDoor;
+        else if (tile === TILE.BLUE_DOOR) mat = matBlueDoor;
+        else mat = matRedDoor;
+        const mesh = new THREE.Mesh(geo, mat);
         mesh.position.set(pos.x, 0.18, pos.z);
         mesh.castShadow = true;
         dynGroup.add(mesh);
-        doorMeshes[key(x,y)] = { mesh, type: 'yellow' };
-      } else if (tile === TILE.BLUE_DOOR) {
-        const mesh = new THREE.Mesh(doorGeo, matBlueDoor);
-        mesh.position.set(pos.x, 0.18, pos.z);
-        mesh.castShadow = true;
-        dynGroup.add(mesh);
-        doorMeshes[key(x,y)] = { mesh, type: 'blue' };
-      } else if (tile === TILE.RED_DOOR) {
-        const mesh = new THREE.Mesh(doorGeo, matRedDoor);
-        mesh.position.set(pos.x, 0.18, pos.z);
-        mesh.castShadow = true;
-        dynGroup.add(mesh);
-        doorMeshes[key(x,y)] = { mesh, type: 'red' };
+        const dtype = tile === TILE.YELLOW_DOOR ? 'yellow' : tile === TILE.BLUE_DOOR ? 'blue' : 'red';
+        doorMeshes[key(x,y)] = { mesh, type: dtype };
       } else if (tile === TILE.STAIR_UP) {
         // Ladder: two poles + rungs
         const ladderGroup = new THREE.Group();
@@ -1004,9 +1214,10 @@ function doBattle(mx, my) {
   state.hp -= result.loss;
   state.gold += result.monster.gold;
 
-  // Remove monster
+  // Remove monster from tracking immediately (prevent double-fight)
   defeatedThisFloor.add(key(mx, my));
   const mesh = info.mesh;
+  delete monsterMeshes[key(mx, my)];
   // Death animation: shrink and fade
   const shrink = { scale: 1 };
   const animId = setInterval(() => {
@@ -1166,7 +1377,10 @@ function checkStairs(x, y) {
 }
 
 function goToFloor(newFloor) {
-  isMoving = false; // Cancel any pending movement animation
+  isMoving = false;
+  // Cancel all pending animation frames
+  pendingAnimFrames.forEach(id => cancelAnimationFrame(id));
+  pendingAnimFrames = [];
   state.floor = newFloor;
   const start = FLOOR_START[newFloor] || [1,1];
   state.px = start[0];
@@ -1193,11 +1407,11 @@ function animateMove(nx, ny) {
   function animate(now) {
     const elapsed = now - startTime;
     const t = Math.min(elapsed / duration, 1);
-    // Ease out
     const ease = 1 - Math.pow(1 - t, 3);
     playerMesh.position.lerpVectors(startPos, target, ease);
     if (t < 1) {
-      requestAnimationFrame(animate);
+      const id = requestAnimationFrame(animate);
+      pendingAnimFrames.push(id);
     } else {
       playerMesh.position.copy(target);
       isMoving = false;
@@ -1205,25 +1419,26 @@ function animateMove(nx, ny) {
       updateMinimap();
     }
   }
-  requestAnimationFrame(animate);
+  const id1 = requestAnimationFrame(animate);
+  pendingAnimFrames.push(id1);
 
   // Bounce effect
   const bounceStart = performance.now();
   function bounce(now) {
     const elapsed = now - bounceStart;
-    if (elapsed > duration) return;
+    if (elapsed > duration) { playerMesh.position.y = 0; return; }
     const t = elapsed / duration;
     const yOffset = Math.sin(t * Math.PI) * 0.3;
-    playerMesh.children.forEach(c => {
-      if (c.isMesh && c.position.y !== undefined) {
-        // Don't modify individual children's world position, modify group's y
-      }
-    });
     playerMesh.position.y = yOffset;
-    if (elapsed < duration) requestAnimationFrame(bounce);
-    else playerMesh.position.y = 0;
+    if (elapsed < duration) {
+      const id = requestAnimationFrame(bounce);
+      pendingAnimFrames.push(id);
+    } else {
+      playerMesh.position.y = 0;
+    }
   }
-  requestAnimationFrame(bounce);
+  const id2 = requestAnimationFrame(bounce);
+  pendingAnimFrames.push(id2);
 }
 
 function updatePlayerLight() {
@@ -1518,9 +1733,49 @@ function animate() {
 // INIT
 // ============================================================
 
+// Seed management
+let currentSeed = Date.now().toString(36).slice(-6);
+function regenerateMaps(seed) {
+  currentSeed = seed;
+  const gen = generateAllMaps(seed);
+  MAPS = gen.maps;
+  MONSTERS = gen.monsters;
+  ITEMS = gen.items;
+  HIDDEN_WALLS = gen.hiddenWalls;
+  FLOOR_START = gen.floorStart;
+  document.getElementById('seed-display').textContent = seed;
+}
+
+// Generate initial random maps BEFORE building scene
+regenerateMaps(currentSeed);
+
 buildFloor();
 updatePlayerLight();
 animate();
+
+// G key to regenerate
+const origHandler = window.handleInput;
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'g' || e.key === 'G') {
+    if (document.getElementById('battle-overlay').classList.contains('active')) return;
+    if (document.getElementById('victory-overlay').classList.contains('active')) return;
+    const newSeed = Date.now().toString(36).slice(-6);
+    regenerateMaps(newSeed);
+    state.floor = 0;
+    state.px = FLOOR_START[0][0];
+    state.py = FLOOR_START[0][1];
+    state.hp = 400; state.maxHp = 400;
+    state.atk = 10; state.def = 10;
+    state.gold = 0;
+    state.yellowKeys = 1; state.blueKeys = 0; state.redKeys = 0;
+    defeatedThisFloor = new Set();
+    inventory.length = 0; history.length = 0;
+    buildFloor();
+    updateHUD();
+    updateMinimap();
+    showMessage('🎲 新地图生成！种子: ' + newSeed, false);
+  }
+});
 
 // Block repeated keypress
 setInterval(() => {
