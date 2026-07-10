@@ -216,7 +216,7 @@ const MONSTER_DB = {
   4: { name:'骷髅兵',     hp:150, atk:40, def:10, gold:8,  color:0xcccccc },
   5: { name:'骷髅法师',   hp:120, atk:60, def:8,  gold:10, color:0x8888cc },
   6: { name:'初级守卫',   hp:200, atk:50, def:20, gold:15, color:0xff8833 },
-  7: { name:'石像鬼',     hp:400, atk:80, def:30, gold:50, color:0xff2222 },
+  7: { name:'石像鬼(Boss)', hp:350, atk:70, def:25, gold:100, color:0xff2222 },
 };
 
 // Item types
@@ -303,8 +303,8 @@ const MAPS = [
 const MONSTERS = [
   // 1F
   [
-    [1,1,1],[1,2,1],[1,3,1], // 3 green slimes in corridor
-    [2,7,1],[2,8,2],          // red slimes
+    [1,2,1],[1,4,1],[1,6,1], // 3 green slimes in corridor
+    [2,7,1],[2,3,8],          // red slimes
     [1,9,5],                   // green slime
   ],
   // 2F
@@ -341,60 +341,59 @@ const MONSTERS = [
 const ITEMS = [
   // 1F
   [
-    ['rg',1,3],  // red gem
-    ['rp',8,1],  // red potion
-    ['yk',3,5],  // yellow key
-    ['yk',9,1],  // yellow key
-    ['yk',4,9],  // yellow key
-    ['bk',7,9],  // blue key (hidden behind wall)
+    ['rg',1,3],['rg',3,1],  // red gems
+    ['rp',8,1],['rp',9,3],  // red potions
+    ['yk',3,5],['yk',9,1],['yk',4,9],  // yellow keys
+    ['bk',7,9],  // blue key
   ],
   // 2F
   [
-    ['bg',4,1],  // blue gem
-    ['rp',1,3],  // red potion
-    ['bp',9,8],  // blue potion
-    ['yk',7,7],  // yellow key
-    ['yk',2,9],  // yellow key
-    ['yk',3,3],  // yellow key
-    ['bk',8,1],  // blue key
+    ['bg',4,1],['bg',9,3],   // blue gems
+    ['rg',5,3],               // red gem
+    ['rp',1,3],['rp',8,3],   // red potions
+    ['bp',9,8],               // blue potion
+    ['yk',7,7],['yk',2,9],['yk',3,3],  // yellow keys
+    ['bk',8,1],               // blue key
   ],
   // 3F
   [
-    ['rg',1,1],['rg',9,1],      // red gems
-    ['bg',1,5],['bg',7,9],      // blue gems
-    ['rp',3,7],['rp',5,9],      // red potions
-    ['bp',1,9],                  // blue potion
-    ['yk',4,1],['yk',7,1],['yk',9,7], // yellow keys
-    ['bk',5,5],                  // blue key
-    ['rk',4,4],                  // red key
+    ['rg',1,1],['rg',9,1],['rg',2,5],   // red gems
+    ['bg',1,5],['bg',7,9],['bg',5,7],    // blue gems
+    ['rp',3,3],['rp',5,9],['rp',7,1],    // red potions
+    ['bp',1,9],['bp',9,9],                // blue potions
+    ['yk',4,1],['yk',7,1],['yk',9,7],     // yellow keys
+    ['bk',5,5],['bk',1,7],                // blue keys
+    ['rk',4,4],                            // red key
   ],
   // 4F
   [
-    ['rg',8,1],['rg',3,7],      // red gems
-    ['bg',1,3],['bg',7,7],      // blue gems
-    ['rp',5,1],['rp',3,3],      // red potions
-    ['bp',7,1],                  // blue potion
-    ['yk',1,5],['yk',9,7],['yk',3,9],['yk',9,9], // yellow keys
-    ['bk',5,3],                  // blue key
-    ['rk',6,8],                  // red key
+    ['rg',8,1],['rg',3,7],['rg',1,5],['rg',7,3],  // red gems
+    ['bg',1,3],['bg',9,5],['bg',5,1],              // blue gems
+    ['rp',5,1],['rp',3,3],['rp',9,7],              // red potions
+    ['bp',7,1],['bp',3,9],                         // blue potions
+    ['yk',1,5],['yk',9,7],['yk',3,9],['yk',9,9],   // yellow keys
+    ['bk',5,3],['bk',5,9],                          // blue keys
+    ['rk',6,8],                                      // red key
   ],
-  // 5F
+  // 5F - Boss floor, final treasures
   [
-    ['rg',7,1],['rg',9,7],      // red gems
-    ['bg',1,7],['bg',7,7],      // blue gems
-    ['rp',3,3],['rp',5,7],      // red potions
-    ['bp',9,9],                  // blue potion
-    ['yk',1,5],['yk',3,9],      // yellow keys
-    ['bk',5,3],                  // blue key
-    ['rk',9,3],                  // red key
+    ['rg',7,1],['rg',9,7],['rg',3,9],  // red gems
+    ['bg',9,3],['bg',7,5],['bg',9,1],  // blue gems
+    ['rp',3,3],['rp',5,7],['rp',1,3],  // red potions
+    ['bp',9,9],['bp',3,5],             // blue potions
+    ['yk',1,5],['yk',3,1],['yk',7,3],  // yellow keys
+    ['bk',5,3],                         // blue key
+    ['rk',9,5],                         // red key
   ],
 ];
 
 // Hidden walls: [floor, x, y] - these LOOK like walls but are passable
+// Hidden walls LOOK like walls but are passable (must align with WALL tiles in maps)
 const HIDDEN_WALLS = [
-  [0, 3, 4], // 1F: hidden passage to blue key area
-  [3, 3, 3], // 4F: secret room entrance
-  [3, 5, 6], // 4F: another hidden path
+  [0, 4, 4], // 1F: secret passage through central wall
+  [2, 2, 2], // 3F: shortcut behind pillar
+  [3, 5, 3], // 4F: hidden entrance to treasure room
+  [3, 6, 5], // 4F: another secret path
 ];
 
 // Player start per floor (when going up): [x, y]
@@ -554,8 +553,9 @@ function buildFloor() {
   const map = MAPS[state.floor];
   const floor = state.floor;
 
-  const wallGeo = new THREE.BoxGeometry(0.95, 1.6, 0.95);
-  const doorGeo = new THREE.BoxGeometry(0.85, 1.3, 0.15);
+  // Low pillars — visible from above, don't block sightlines
+  const wallGeo = new THREE.BoxGeometry(0.22, 0.35, 0.22);
+  const doorGeo = new THREE.BoxGeometry(0.85, 0.35, 0.12);
   const half = 0.5;
 
   for (let y = 0; y < SIZE; y++) {
@@ -567,58 +567,72 @@ function buildFloor() {
       if (tile === TILE.WALL) {
         // Check if it's a hidden wall
         if (isHiddenWall(floor, x, y)) {
-          // Hidden wall: darker, slightly different look
-          const hwMat = new THREE.MeshStandardMaterial({ color: 0x2a2a3a, roughness: 0.9, metalness: 0.05, transparent:true, opacity: 0.85 });
+          const hwMat = new THREE.MeshStandardMaterial({ color: 0x2a2a3a, roughness: 0.9, metalness: 0.05, transparent:true, opacity: 0.55 });
           const mesh = new THREE.Mesh(wallGeo, hwMat);
-          mesh.position.copy(pos);
-          mesh.position.y = 0.8;
+          mesh.position.set(pos.x, 0.18, pos.z);
           mesh.castShadow = true;
-          mesh.receiveShadow = true;
           dynGroup.add(mesh);
           wallMeshes[key(x,y)] = mesh;
         } else {
           const mesh = new THREE.Mesh(wallGeo, matWall);
-          mesh.position.copy(pos);
-          mesh.position.y = 0.8;
+          mesh.position.set(pos.x, 0.18, pos.z);
           mesh.castShadow = true;
-          mesh.receiveShadow = true;
+          // Top cap
+          const capGeo = new THREE.BoxGeometry(0.28, 0.06, 0.28);
+          const cap = new THREE.Mesh(capGeo, matWall);
+          cap.position.y = 0.20;
+          mesh.add(cap);
           dynGroup.add(mesh);
           wallMeshes[key(x,y)] = mesh;
         }
       } else if (tile === TILE.YELLOW_DOOR) {
         const mesh = new THREE.Mesh(doorGeo, matYellowDoor);
-        mesh.position.set(pos.x, 0.65, pos.z);
+        mesh.position.set(pos.x, 0.18, pos.z);
         mesh.castShadow = true;
         dynGroup.add(mesh);
         doorMeshes[key(x,y)] = { mesh, type: 'yellow' };
       } else if (tile === TILE.BLUE_DOOR) {
         const mesh = new THREE.Mesh(doorGeo, matBlueDoor);
-        mesh.position.set(pos.x, 0.65, pos.z);
+        mesh.position.set(pos.x, 0.18, pos.z);
         mesh.castShadow = true;
         dynGroup.add(mesh);
         doorMeshes[key(x,y)] = { mesh, type: 'blue' };
       } else if (tile === TILE.RED_DOOR) {
         const mesh = new THREE.Mesh(doorGeo, matRedDoor);
-        mesh.position.set(pos.x, 0.65, pos.z);
+        mesh.position.set(pos.x, 0.18, pos.z);
         mesh.castShadow = true;
         dynGroup.add(mesh);
         doorMeshes[key(x,y)] = { mesh, type: 'red' };
       } else if (tile === TILE.STAIR_UP) {
-        const stairGeo = new THREE.TorusGeometry(0.35, 0.1, 8, 16);
-        const mesh = new THREE.Mesh(stairGeo, matStair);
-        mesh.position.set(pos.x, 0.3, pos.z);
-        mesh.rotation.x = -Math.PI/2;
-        mesh.castShadow = true;
-        dynGroup.add(mesh);
-        stairMesh = mesh;
-
-        // Glow ring
-        const glowGeo = new THREE.RingGeometry(0.3, 0.45, 32);
-        const glowMat = new THREE.MeshBasicMaterial({ color:0xf5c842, side:THREE.DoubleSide, transparent:true, opacity:0.4 });
+        // Ladder: two poles + rungs
+        const ladderGroup = new THREE.Group();
+        const poleMat = new THREE.MeshStandardMaterial({ color:0x8B6914, roughness:0.5, metalness:0.3 });
+        const rungMat = new THREE.MeshStandardMaterial({ color:0xc49a30, roughness:0.4, metalness:0.5, emissive:0x331100, emissiveIntensity:0.6 });
+        // Side poles
+        for (let sx = -1; sx <= 1; sx += 2) {
+          const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.7, 6), poleMat);
+          pole.position.set(sx * 0.2, 0.35, 0);
+          pole.castShadow = true;
+          ladderGroup.add(pole);
+        }
+        // Cross rungs
+        for (let i = 0; i < 5; i++) {
+          const rung = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.38, 6), rungMat);
+          rung.rotation.z = Math.PI/2;
+          rung.position.set(0, 0.1 + i * 0.14, 0);
+          rung.castShadow = true;
+          ladderGroup.add(rung);
+        }
+        // Glow base
+        const glowGeo = new THREE.RingGeometry(0.25, 0.4, 32);
+        const glowMat = new THREE.MeshBasicMaterial({ color:0xf5c842, side:THREE.DoubleSide, transparent:true, opacity:0.35 });
         const glow = new THREE.Mesh(glowGeo, glowMat);
-        glow.position.set(pos.x, 0.15, pos.z);
         glow.rotation.x = -Math.PI/2;
-        dynGroup.add(glow);
+        glow.position.y = 0.03;
+        ladderGroup.add(glow);
+        ladderGroup.position.set(pos.x, 0, pos.z);
+        dynGroup.add(ladderGroup);
+        stairMesh = ladderGroup;
         stairMesh.glow = glow;
       }
 
@@ -663,6 +677,9 @@ function buildFloor() {
   // Create player
   createPlayerMesh();
 
+  // Compass direction markers on floor edges
+  addCompassMarkers();
+
   updateHUD();
   updateMinimap();
 }
@@ -670,55 +687,158 @@ function buildFloor() {
 function createMonsterMesh(mData, mx, my) {
   const group = new THREE.Group();
   const pos = gridToWorld(mx, my);
+  const name = mData.name;
+  const c = mData.color;
+  const mat = new THREE.MeshStandardMaterial({ color:c, roughness:0.4, metalness:0.2, emissive:c, emissiveIntensity:0.25 });
+  const darkMat = new THREE.MeshStandardMaterial({ color:c, roughness:0.5, metalness:0.1 });
 
-  // Body
-  const bodyGeo = new THREE.SphereGeometry(0.32, 12, 10);
-  const bodyMat = new THREE.MeshStandardMaterial({ color: mData.color, roughness: 0.4, metalness: 0.2, emissive:mData.color, emissiveIntensity:0.3 });
-  const body = new THREE.Mesh(bodyGeo, bodyMat);
-  body.position.y = 0.4;
-  body.castShadow = true;
-  group.add(body);
+  if (name.includes('史莱姆')) {
+    // Squished sphere — gooey blob
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.32, 16, 12), mat);
+    body.scale.set(1, 0.55, 1);
+    body.position.y = 0.2;
+    body.castShadow = true;
+    group.add(body);
+    // Eyes on top
+    const eyeG = new THREE.SphereGeometry(0.07, 6, 6);
+    const eyeW = new THREE.MeshBasicMaterial({ color:0xffffff });
+    const eyeB = new THREE.MeshBasicMaterial({ color:0x000000 });
+    for (let sx = -1; sx <= 1; sx += 2) {
+      const ew = new THREE.Mesh(eyeG, eyeW);
+      ew.position.set(sx*0.1, 0.3, -0.22);
+      group.add(ew);
+      const eb = new THREE.Mesh(new THREE.SphereGeometry(0.035, 4, 4), eyeB);
+      eb.position.set(sx*0.1, 0.3, -0.27);
+      group.add(eb);
+    }
 
-  // Eyes
-  const eyeGeo = new THREE.SphereGeometry(0.08, 6, 6);
-  const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-  const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
-  eyeL.position.set(-0.1, 0.48, -0.28);
-  group.add(eyeL);
-  const eyeR = new THREE.Mesh(eyeGeo, eyeMat);
-  eyeR.position.set(0.1, 0.48, -0.28);
-  group.add(eyeR);
+  } else if (name.includes('蝙蝠')) {
+    // Dark body with triangular wings
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), darkMat);
+    body.position.y = 0.35;
+    body.castShadow = true;
+    group.add(body);
+    // Wings
+    const wingGeo = new THREE.ConeGeometry(0.28, 0.12, 6);
+    for (let sx = -1; sx <= 1; sx += 2) {
+      const wing = new THREE.Mesh(wingGeo, new THREE.MeshStandardMaterial({ color:0x444466, roughness:0.6, side:THREE.DoubleSide }));
+      wing.position.set(sx*0.25, 0.38, -0.05);
+      wing.rotation.z = -sx * Math.PI/4;
+      wing.rotation.x = 0.3;
+      group.add(wing);
+    }
+    // Red eyes
+    const reye = new THREE.Mesh(new THREE.SphereGeometry(0.04, 4, 4), new THREE.MeshBasicMaterial({ color:0xff0000 }));
+    reye.position.set(-0.06, 0.42, -0.15);
+    group.add(reye);
+    const reye2 = reye.clone();
+    reye2.position.x = 0.06;
+    group.add(reye2);
 
-  // Pupils
-  const pupilGeo = new THREE.SphereGeometry(0.04, 4, 4);
-  const pupilMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
-  const pupilL = new THREE.Mesh(pupilGeo, pupilMat);
-  pupilL.position.set(-0.1, 0.48, -0.33);
-  group.add(pupilL);
-  const pupilR = new THREE.Mesh(pupilGeo, pupilMat);
-  pupilR.position.set(0.1, 0.48, -0.33);
-  group.add(pupilR);
+  } else if (name.includes('骷髅兵')) {
+    // Stick figure skeleton
+    const boneMat = new THREE.MeshStandardMaterial({ color:0xddddcc, roughness:0.6, metalness:0.05 });
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), boneMat);
+    skull.position.y = 0.5;
+    skull.castShadow = true;
+    group.add(skull);
+    // Spine + ribs
+    const spine = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.22, 6), boneMat);
+    spine.position.y = 0.32;
+    group.add(spine);
+    // Arms
+    for (let sx = -1; sx <= 1; sx += 2) {
+      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.25, 6), boneMat);
+      arm.position.set(sx*0.15, 0.38, 0);
+      arm.rotation.z = sx * 0.6;
+      group.add(arm);
+    }
+    // Legs
+    for (let sx = -1; sx <= 1; sx += 2) {
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.2, 6), boneMat);
+      leg.position.set(sx*0.08, 0.12, 0);
+      group.add(leg);
+    }
+    // Sword
+    const swordB = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.35, 0.03), new THREE.MeshStandardMaterial({ color:0xcccccc, roughness:0.3, metalness:0.8 }));
+    swordB.position.set(0.2, 0.4, 0);
+    swordB.rotation.z = -0.3;
+    group.add(swordB);
 
-  // Type-specific features
-  if (mData.name.includes('蝙蝠')) {
-    const wingGeo = new THREE.ConeGeometry(0.25, 0.2, 6);
-    const wingL = new THREE.Mesh(wingGeo, bodyMat);
-    wingL.position.set(-0.3, 0.45, 0);
-    wingL.rotation.z = Math.PI/2;
-    group.add(wingL);
-    const wingR = new THREE.Mesh(wingGeo, bodyMat);
-    wingR.position.set(0.3, 0.45, 0);
-    wingR.rotation.z = -Math.PI/2;
-    group.add(wingR);
+  } else if (name.includes('骷髅法师')) {
+    // Robed figure with staff
+    const robe = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.4, 8), mat);
+    robe.position.y = 0.2;
+    robe.castShadow = true;
+    group.add(robe);
+    // Pointy hat
+    const hat = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.2, 8), mat);
+    hat.position.y = 0.48;
+    group.add(hat);
+    // Staff
+    const staffPole = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.55, 6), new THREE.MeshStandardMaterial({ color:0x8B6914, roughness:0.4, metalness:0.3 }));
+    staffPole.position.set(0.2, 0.3, 0);
+    group.add(staffPole);
+    // Staff orb
+    const orb = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), new THREE.MeshStandardMaterial({ color:0x8844ff, roughness:0.2, metalness:0.5, emissive:0x4422aa, emissiveIntensity:1.5 }));
+    orb.position.set(0.2, 0.6, 0);
+    group.add(orb);
+
+  } else if (name.includes('守卫')) {
+    // Armored warrior
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.35, 0.2), mat);
+    body.position.y = 0.3;
+    body.castShadow = true;
+    group.add(body);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 8), new THREE.MeshStandardMaterial({ color:c, roughness:0.3, metalness:0.6 }));
+    head.position.y = 0.55;
+    head.castShadow = true;
+    group.add(head);
+    // Helmet crest
+    const crest = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.12, 0.18), mat);
+    crest.position.y = 0.65;
+    group.add(crest);
+    // Shield
+    const shield = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.04, 8), new THREE.MeshStandardMaterial({ color:0xaa6633, roughness:0.3, metalness:0.7 }));
+    shield.position.set(-0.18, 0.3, 0);
+    group.add(shield);
+
+  } else if (name.includes('石像鬼')) {
+    // Large rocky boss
+    const body = new THREE.Mesh(new THREE.DodecahedronGeometry(0.35, 0), new THREE.MeshStandardMaterial({ color:c, roughness:0.7, metalness:0.1, emissive:c, emissiveIntensity:0.4 }));
+    body.position.y = 0.35;
+    body.castShadow = true;
+    group.add(body);
+    // Horns
+    for (let sx = -1; sx <= 1; sx += 2) {
+      const horn = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.2, 6), mat);
+      horn.position.set(sx*0.15, 0.6, -0.1);
+      horn.rotation.x = -0.3;
+      horn.rotation.z = sx * 0.3;
+      group.add(horn);
+    }
+    // Glowing eyes
+    const bigEye = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), new THREE.MeshBasicMaterial({ color:0xff4400 }));
+    bigEye.position.set(-0.12, 0.42, -0.28);
+    group.add(bigEye);
+    const bigEye2 = bigEye.clone();
+    bigEye2.position.x = 0.12;
+    group.add(bigEye2);
+    // Scale up
+    group.scale.setScalar(1.1);
+
+  } else {
+    // Fallback: generic sphere
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.32, 12, 10), mat);
+    body.position.y = 0.35;
+    body.castShadow = true;
+    group.add(body);
   }
 
-  // Floating animation data
   group.userData = {
-    baseY: 0,
     floatOffset: Math.random() * Math.PI * 2,
-    monsterType: mData.name,
+    monsterType: name,
   };
-
   group.position.set(pos.x, 0, pos.z);
   return group;
 }
@@ -727,29 +847,66 @@ function createItemMesh(itype, ix, iy) {
   const group = new THREE.Group();
   const pos = gridToWorld(ix, iy);
 
-  let mesh;
   if (itype === ITEM.RED_GEM || itype === ITEM.BLUE_GEM) {
-    const gemGeo = new THREE.OctahedronGeometry(0.22, 0);
-    const mat = itype === ITEM.RED_GEM ? matRedGem : matBlueGem;
-    mesh = new THREE.Mesh(gemGeo, mat);
-    mesh.position.y = 0.35;
+    // Octahedron gem with glow
+    const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.2, 0), itype === ITEM.RED_GEM ? matRedGem : matBlueGem);
+    gem.position.y = 0.25;
+    gem.castShadow = true;
+    group.add(gem);
+    // Inner sparkle
+    const spark = new THREE.Mesh(new THREE.OctahedronGeometry(0.08, 0), new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:0.4 }));
+    spark.position.y = 0.25;
+    group.add(spark);
+
   } else if (itype === ITEM.RED_POTION || itype === ITEM.BLUE_POTION) {
-    const potGeo = new THREE.CylinderGeometry(0.15, 0.18, 0.45, 8);
-    const mat = itype === ITEM.RED_POTION ? matRedPotion : matBluePotion;
-    mesh = new THREE.Mesh(potGeo, mat);
-    mesh.position.y = 0.28;
+    const pmat = itype === ITEM.RED_POTION ? matRedPotion : matBluePotion;
+    // Bottle body
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 0.28, 8), pmat);
+    body.position.y = 0.18;
+    body.castShadow = true;
+    group.add(body);
+    // Bottle neck
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.08, 0.12, 8), pmat);
+    neck.position.y = 0.36;
+    group.add(neck);
+    // Cork
+    const cork = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.05, 8), new THREE.MeshStandardMaterial({ color:0x8B6914, roughness:0.7 }));
+    cork.position.y = 0.44;
+    group.add(cork);
+    // Bubbles for blue potion
+    if (itype === ITEM.BLUE_POTION) {
+      const bub = new THREE.Mesh(new THREE.SphereGeometry(0.03, 4, 4), new THREE.MeshBasicMaterial({ color:0xaaccff, transparent:true, opacity:0.6 }));
+      bub.position.y = 0.22;
+      bub.position.x = 0.04;
+      group.add(bub);
+      group.userData.hasBubble = true;
+    }
+
   } else {
-    // Key
-    const keyGeo = new THREE.BoxGeometry(0.08, 0.3, 0.06);
-    mesh = new THREE.Mesh(keyGeo, matKey);
-    mesh.position.y = 0.25;
+    // Key with ring head + shaft + teeth
+    let keyMat;
+    if (itype === ITEM.YELLOW_KEY) keyMat = new THREE.MeshStandardMaterial({ color:0xf5c842, roughness:0.2, metalness:0.7, emissive:0x332200, emissiveIntensity:0.5 });
+    else if (itype === ITEM.BLUE_KEY) keyMat = new THREE.MeshStandardMaterial({ color:0x89b4fa, roughness:0.2, metalness:0.7, emissive:0x001133, emissiveIntensity:0.5 });
+    else keyMat = new THREE.MeshStandardMaterial({ color:0xf38ba8, roughness:0.2, metalness:0.7, emissive:0x330011, emissiveIntensity:0.5 });
+    // Ring (torus)
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.03, 8, 8), keyMat);
+    ring.position.y = 0.32;
+    group.add(ring);
+    // Shaft
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.25, 6), keyMat);
+    shaft.position.y = 0.14;
+    group.add(shaft);
+    // Teeth
+    const tooth1 = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.03, 0.04), keyMat);
+    tooth1.position.set(0, 0.02, 0);
+    group.add(tooth1);
+    const tooth2 = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.03, 0.04), keyMat);
+    tooth2.position.set(0, 0.08, 0);
+    group.add(tooth2);
   }
 
-  mesh.castShadow = true;
-  group.add(mesh);
   group.position.set(pos.x, 0, pos.z);
   group.userData = {
-    baseY: 0,
     floatOffset: Math.random() * Math.PI * 2,
   };
   return group;
@@ -796,6 +953,36 @@ function createPlayerMesh() {
   group.position.set(pos.x, 0, pos.z);
   playerMesh = group;
   dynGroup.add(group);
+}
+
+function addCompassMarkers() {
+  // N/E/S/W markers on floor edges
+  const dirs = [
+    { label:'N', x:SIZE/2, z:0.3, rot:0 },
+    { label:'S', x:SIZE/2, z:SIZE-0.3, rot:Math.PI },
+    { label:'E', x:SIZE-0.3, z:SIZE/2, rot:-Math.PI/2 },
+    { label:'W', x:0.3, z:SIZE/2, rot:Math.PI/2 },
+  ];
+  const canvas = document.createElement('canvas');
+  canvas.width = 64; canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#888888';
+  ctx.font = 'bold 36px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  dirs.forEach(({label, x, z, rot}) => {
+    ctx.clearRect(0, 0, 64, 64);
+    ctx.fillText(label, 32, 32);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.minFilter = THREE.LinearFilter;
+    const spriteMat = new THREE.SpriteMaterial({ map:tex, transparent:true, opacity:0.5 });
+    const sprite = new THREE.Sprite(spriteMat);
+    sprite.position.set(x, 0.06, z);
+    sprite.scale.set(0.7, 0.7, 1);
+    sprite.rotation.z = rot;
+    dynGroup.add(sprite);
+  });
 }
 
 // ============================================================
@@ -1279,6 +1466,11 @@ controls.mouseButtons = {
 };
 controls.update();
 
+// Track drag state for camera snap
+controls._isDragging = false;
+renderer.domElement.addEventListener('pointerdown', () => { controls._isDragging = true; });
+renderer.domElement.addEventListener('pointerup', () => { setTimeout(() => { controls._isDragging = false; }, 150); });
+
 function resetCamera() {
   controls.target.set(SIZE/2, 0, SIZE/2);
   camera.position.set(8, 12, 14);
@@ -1307,11 +1499,28 @@ function animate() {
 
   controls.update();
 
-  // Float items
-  for (const mesh of Object.values(itemMeshes)) {
-    const ud = mesh.mesh.userData;
-    mesh.mesh.position.y = Math.sin(time * 2.5 + ud.floatOffset) * 0.1 + 0.1;
-    mesh.mesh.rotation.y += dt * 1.2;
+  // Camera snap: auto-align to nearest 90° when not rotating
+  const isDragging = controls._isDragging || false;
+  if (!isDragging) {
+    const azimuth = controls.getAzimuthalAngle();
+    const target = Math.round(azimuth / (Math.PI/2)) * (Math.PI/2);
+    if (Math.abs(azimuth - target) > 0.005) {
+      const newAzimuth = azimuth + (target - azimuth) * 0.12;
+      // Reconstruct spherical coords
+      const spherical = new THREE.Spherical();
+      spherical.setFromVector3(camera.position.clone().sub(controls.target));
+      spherical.theta = newAzimuth;
+      const newPos = new THREE.Vector3().setFromSpherical(spherical).add(controls.target);
+      camera.position.copy(newPos);
+      camera.lookAt(controls.target);
+    }
+  }
+
+  // Float items (groups, float the whole group)
+  for (const entry of Object.values(itemMeshes)) {
+    const ud = entry.mesh.userData;
+    entry.mesh.position.y = Math.sin(time * 2.5 + ud.floatOffset) * 0.1;
+    entry.mesh.rotation.y += dt * 1.2;
   }
 
   // Float monsters slightly
@@ -1320,12 +1529,9 @@ function animate() {
     info.mesh.position.y = Math.sin(time * 2 + ud.floatOffset) * 0.06;
   }
 
-  // Stair rotation
-  if (stairMesh) {
-    stairMesh.rotation.z += dt * 1.5;
-    if (stairMesh.glow) {
-      stairMesh.glow.material.opacity = 0.3 + Math.sin(time * 3) * 0.15;
-    }
+  // Stair glow pulse (ladder)
+  if (stairMesh && stairMesh.glow) {
+    stairMesh.glow.material.opacity = 0.25 + Math.sin(time * 3) * 0.15;
   }
 
   updatePlayerLight();
