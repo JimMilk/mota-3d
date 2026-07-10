@@ -76,6 +76,20 @@
   }
   #minimap canvas { display:block; border-radius: 6px; }
 
+  #quick-battle-bar {
+    position: fixed; bottom: 172px; right: 16px;
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 10px;
+    z-index: 10;
+  }
+  #quick-battle-label {
+    color: var(--text); font-size: 11px; cursor: pointer;
+    display: flex; align-items: center; gap: 6px;
+  }
+  #quick-battle-label input { cursor: pointer; }
+
   #battle-overlay {
     position: fixed; inset: 0;
     background: rgba(0,0,0,0.7);
@@ -213,6 +227,13 @@
 </div>
 
 <div id="minimap"><canvas id="minimap-canvas" width="132" height="132"></canvas></div>
+
+<div id="quick-battle-bar">
+  <label id="quick-battle-label">
+    <input type="checkbox" id="quick-battle-cb" checked>
+    ⚡ 快速战斗
+  </label>
+</div>
 
 <div id="seed-panel">
   <span class="seed-label">🎲 种子</span>
@@ -447,6 +468,7 @@ const history = [];   // last N log entries
 const MAX_HISTORY = 8;
 let pendingAnimFrames = []; // track requestAnimationFrame IDs for cleanup
 let isMoving = false;
+let animFrame = 0; // frame counter for throttled operations
 
 // ============================================================
 // THREE.JS SETUP
@@ -590,10 +612,14 @@ function buildFloor() {
       if (tile === TILE.WALL) {
         // Check if it's a hidden wall
         if (isHiddenWall(floor, x, y)) {
-          const hwMat = new THREE.MeshStandardMaterial({ color: 0x2a2a3a, roughness: 0.9, metalness: 0.05, transparent:true, opacity: 0.55 });
-          const mesh = new THREE.Mesh(wallGeo, hwMat);
+          // Hidden walls look identical to regular walls
+          const mesh = new THREE.Mesh(wallGeo, matWall);
           mesh.position.set(pos.x, 0.19, pos.z);
           mesh.castShadow = true;
+          const capGeo = new THREE.BoxGeometry(0.95, 0.06, 0.95);
+          const cap = new THREE.Mesh(capGeo, matWall);
+          cap.position.y = 0.41;
+          mesh.add(cap);
           dynGroup.add(mesh);
           wallMeshes[key(x,y)] = mesh;
         } else {
@@ -1683,6 +1709,8 @@ function animate() {
   }
 
   updatePlayerLight();
+  // Update monster damage preview labels (throttled to every 15 frames)
+  if ((animFrame = (animFrame || 0) + 1) % 15 === 0) updateMonsterLabels();
   renderer.render(scene, camera);
 }
 
@@ -1696,7 +1724,13 @@ function createRNG(seed){let s=hashStr(String(seed));return function(){s|=0;s=s+
 function ensurePath(map,sx,sy,ex,ey,rng){const v=Array.from({length:11},()=>Array(11).fill(false));const q=[[sx,sy]];v[sy][sx]=true;while(q.length){const[cx,cy]=q.shift();for(const[dx,dy]of[[0,-1],[0,1],[-1,0],[1,0]]){const nx=cx+dx,ny=cy+dy;if(nx<0||nx>=11||ny<0||ny>=11||v[ny][nx])continue;if(map[ny][nx]===1)continue;v[ny][nx]=true;q.push([nx,ny]);}}if(!v[ey][ex]){let cx=sx,cy=sy;for(let s=0;s<100&&!(cx===ex&&cy===ey);s++){const dx=Math.sign(ex-cx),dy=Math.sign(ey-cy);let m=false;for(const[ddx,ddy]of[[dx,0],[0,dy],[dx,dy]]){const nx=cx+ddx,ny=cy+ddy;if(nx>=1&&nx<10&&ny>=1&&ny<10){if(map[ny][nx]===1){map[ny][nx]=0;m=true;cx=nx;cy=ny;break;}if(ddx||ddy){cx=nx;cy=ny;m=true;break;}}}if(!m)break;}}}
 function placeDoors(map,rng,fn){const n=2+Math.floor(rng()*3);for(let i=0;i<n;i++){const c=[];for(let y=2;y<9;y++)for(let x=2;x<9;x++){if(map[y][x]!==0)continue;const nW=map[y-1][x]===1,sW=map[y+1][x]===1,eW=map[y][x+1]===1,wW=map[y][x-1]===1;if((nW&&sW&&!eW&&!wW)||(eW&&wW&&!nW&&!sW))c.push([x,y]);}if(!c.length)break;const[dx,dy]=c[Math.floor(rng()*c.length)];const dt=fn>=3?(rng()<0.4?4:rng()<0.5?3:2):fn>=1?(rng()<0.5?3:2):2;map[dy][dx]=dt;}}
 function divideMaze(map,x1,y1,x2,y2,rng){const w=x2-x1;const h=y2-y1;if(w<2||h<2)return;let horizontal;if(w>h*1.5)horizontal=true;else if(h>w*1.5)horizontal=false;else horizontal=rng()<0.5;if(horizontal){let wallY=y1+1+Math.floor(rng()*(y2-y1-1));if(wallY<=y1)wallY=y1+1;if(wallY>=y2)wallY=y2-1;const gapX=x1+Math.floor(rng()*(x2-x1+1));for(let x=x1;x<=x2;x++){if(x!==gapX)map[wallY][x]=1;}if(rng()<0.25){const g2=x1+Math.floor(rng()*(x2-x1+1));if(g2!==gapX)map[wallY][g2]=0;}divideMaze(map,x1,y1,x2,wallY-1,rng);divideMaze(map,x1,wallY+1,x2,y2,rng);}else{let wallX=x1+1+Math.floor(rng()*(x2-x1-1));if(wallX<=x1)wallX=x1+1;if(wallX>=x2)wallX=x2-1;const gapY=y1+Math.floor(rng()*(y2-y1+1));for(let y=y1;y<=y2;y++){if(y!==gapY)map[y][wallX]=1;}if(rng()<0.25){const g2=y1+Math.floor(rng()*(y2-y1+1));if(g2!==gapY)map[g2][wallX]=0;}divideMaze(map,x1,y1,wallX-1,y2,rng);divideMaze(map,wallX+1,y1,x2,y2,rng);}}
-function generateAllMaps(seed){const rng=createRNG(seed);const maps=[],mons=[],its=[],hws=[];for(let f=0;f<5;f++){const map=Array.from({length:11},()=>Array(11).fill(0));for(let i=0;i<11;i++)map[0][i]=map[10][i]=map[i][0]=map[i][10]=1;divideMaze(map,1,1,9,9,rng);const cand=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0&&!(x===5&&y===9))cand.push([x,y]);cand.sort((a,b)=>(Math.abs(b[0]-5)+Math.abs(b[1]-9))-(Math.abs(a[0]-5)+Math.abs(a[1]-9)));const[sx,sy]=cand[Math.floor(rng()*Math.min(5,cand.length))]||cand[0];map[sy][sx]=9;ensurePath(map,5,9,sx,sy,rng);placeDoors(map,rng,f);if(f>=1&&f<=3){const dt=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0&&!(x===sx&&y===sy))dt.push([x,y]);if(dt.length){const[dx,dy]=dt[Math.floor(rng()*dt.length)];map[dy][dx]=8;}}if(f===4){const dt=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0)dt.push([x,y]);if(dt.length){const[dx,dy]=dt[Math.floor(rng()*dt.length)];map[dy][dx]=8;}}const wl=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0)wl.push([x,y]);const pool=wl.filter(([x,y])=>!(x===5&&y===9)&&!(x===sx&&y===sy));const mc=3+f*2;const ms=[];const mt=f===4?[4,5,6,7]:f>=2?[2,3,4,5]:f>=1?[1,2,3,4]:[1,2];const mpool=[...pool];for(let i=0;i<mc&&mpool.length;i++){const idx=Math.floor(rng()*mpool.length);const[mx,my]=mpool.splice(idx,1)[0];ms.push([mt[Math.floor(rng()*mt.length)],mx,my]);}const id=[['rg','rp','yk','yk','bk'],['bg','rg','rp','bp','yk','yk','yk','bk'],['rg','rg','bg','bg','rp','rp','bp','yk','yk','yk','bk','rk'],['rg','rg','bg','bg','rp','rp','bp','bp','yk','yk','yk','yk','bk','bk','rk'],['rg','rg','rg','bg','bg','bg','rp','rp','rp','bp','bp','yk','yk','yk','bk','rk']];const items=[];const defs=id[Math.min(f,4)];const ipool=[...wl].filter(([x,y])=>!(x===5&&y===9)&&!(x===sx&&y===sy));for(let i=0;i<defs.length&&ipool.length;i++){const idx=Math.floor(rng()*ipool.length);const[ix,iy]=ipool.splice(idx,1)[0];items.push([defs[i],ix,iy]);}if(rng()<0.6){const wt=[];for(let y=2;y<9;y++)for(let x=2;x<9;x++)if(map[y][x]===1)wt.push([x,y]);if(wt.length){const[wx,wy]=wt[Math.floor(rng()*wt.length)];hws.push([f,wx,wy]);}}maps.push(map);mons.push(ms);its.push(items);}return{maps,monsters:mons,items:its,hiddenWalls:hws};}
+function generateAllMaps(seed){const rng=createRNG(seed);const maps=[],mons=[],its=[],hws=[];for(let f=0;f<5;f++){const map=Array.from({length:11},()=>Array(11).fill(0));for(let i=0;i<11;i++)map[0][i]=map[10][i]=map[i][0]=map[i][10]=1;divideMaze(map,1,1,9,9,rng);
+  // Clear spawn area and ensure adjacency
+  map[9][5]=0;
+  for(const[dxx,dyy]of[[0,-1],[0,1],[-1,0],[1,0]]){
+    const ax=5+dxx,ay=9+dyy;
+    if(ax>=1&&ax<10&&ay>=1&&ay<10)map[ay][ax]=0;
+  }const cand=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0&&!(x===5&&y===9))cand.push([x,y]);cand.sort((a,b)=>(Math.abs(b[0]-5)+Math.abs(b[1]-9))-(Math.abs(a[0]-5)+Math.abs(a[1]-9)));const[sx,sy]=cand[Math.floor(rng()*Math.min(5,cand.length))]||cand[0];map[sy][sx]=9;ensurePath(map,5,9,sx,sy,rng);for(const[dxx,dyy]of[[0,-1],[0,1],[-1,0],[1,0]]){const ax=sx+dxx,ay=sy+dyy;if(ax>=1&&ax<10&&ay>=1&&ay<10)map[ay][ax]=0;}placeDoors(map,rng,f);if(f>=1&&f<=3){const dt=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0&&!(x===sx&&y===sy))dt.push([x,y]);if(dt.length){const[dx,dy]=dt[Math.floor(rng()*dt.length)];map[dy][dx]=8;for(const[ddx,ddy]of[[0,-1],[0,1],[-1,0],[1,0]]){const ax=dx+ddx,ay=dy+ddy;if(ax>=1&&ax<10&&ay>=1&&ay<10)map[ay][ax]=0;}}if(f===4){const dt=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0)dt.push([x,y]);if(dt.length){const[dx,dy]=dt[Math.floor(rng()*dt.length)];map[dy][dx]=8;for(const[ddx,ddy]of[[0,-1],[0,1],[-1,0],[1,0]]){const ax=dx+ddx,ay=dy+ddy;if(ax>=1&&ax<10&&ay>=1&&ay<10)map[ay][ax]=0;}}const wl=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0)wl.push([x,y]);const pool=wl.filter(([x,y])=>!(x===5&&y===9)&&!(x===sx&&y===sy));const mc=3+f*2;const ms=[];const mt=f===4?[4,5,6,7]:f>=2?[2,3,4,5]:f>=1?[1,2,3,4]:[1,2];const mpool=[...pool];for(let i=0;i<mc&&mpool.length;i++){const idx=Math.floor(rng()*mpool.length);const[mx,my]=mpool.splice(idx,1)[0];ms.push([mt[Math.floor(rng()*mt.length)],mx,my]);}const id=[['rg','rp','yk','yk','bk'],['bg','rg','rp','bp','yk','yk','yk','bk'],['rg','rg','bg','bg','rp','rp','bp','yk','yk','yk','bk','rk'],['rg','rg','bg','bg','rp','rp','bp','bp','yk','yk','yk','yk','bk','bk','rk'],['rg','rg','rg','bg','bg','bg','rp','rp','rp','bp','bp','yk','yk','yk','bk','rk']];const items=[];const defs=id[Math.min(f,4)];const ipool=[...wl].filter(([x,y])=>!(x===5&&y===9)&&!(x===sx&&y===sy));for(let i=0;i<defs.length&&ipool.length;i++){const idx=Math.floor(rng()*ipool.length);const[ix,iy]=ipool.splice(idx,1)[0];items.push([defs[i],ix,iy]);}if(rng()<0.6){const wt=[];for(let y=2;y<9;y++)for(let x=2;x<9;x++)if(map[y][x]===1)wt.push([x,y]);if(wt.length){const[wx,wy]=wt[Math.floor(rng()*wt.length)];hws.push([f,wx,wy]);}}maps.push(map);mons.push(ms);its.push(items);}return{maps,monsters:mons,items:its,hiddenWalls:hws};}
 
 
 // ============================================================
