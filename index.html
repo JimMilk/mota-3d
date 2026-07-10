@@ -168,6 +168,15 @@
     z-index: 10;
     pointer-events: auto;
   }
+  #quick-battle-bar {
+    position: fixed; bottom: 158px; right: 16px;
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 4px 10px;
+    z-index: 10;
+    pointer-events: auto;
+  }
   #controls-hint {
     position: fixed; bottom: 10px; left: 185px;
     font-size: 10px; color: #585b70;
@@ -228,6 +237,12 @@
   </div>
 </div>
 
+<div id="quick-battle-bar">
+  <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#cdd6f4;cursor:pointer;">
+    <input type="checkbox" id="quick-battle-cb" checked style="accent-color:var(--accent);">
+    ⚡ 快速战斗
+  </label>
+</div>
 <div id="minimap"><canvas id="minimap-canvas" width="132" height="132"></canvas></div>
 
 <div id="seed-panel">
@@ -1492,16 +1507,13 @@ function updateHUD() {
   document.getElementById('rk-val').textContent = state.redKeys;
   document.getElementById('steps-val').textContent = state.steps;
   document.getElementById('kills-val').textContent = state.monstersKilled;
-  // Score: rewards efficiency (low steps, high kills+stats+hp)
-  const s = getStats();
-  const score = state.monstersKilled * 150 + state.gold * 12 + s.atk * 8 + s.def * 8 + state.hp - state.steps * 5;
-    document.getElementById('score-val').textContent = Math.max(0, score);
-  
-  // Equipment display
+
   const s = getStats();
   document.getElementById('atk-val').textContent = s.atk;
   document.getElementById('def-val').textContent = s.def;
-  
+  const score = state.monstersKilled * 150 + state.gold * 12 + s.atk * 8 + s.def * 8 + state.hp - state.steps * 5;
+  document.getElementById('score-val').textContent = Math.max(0, score);
+
   // Equipment slots
   for (const slot of ['weapon','shield','armor']) {
     const el = document.getElementById('eq-' + slot);
@@ -1962,6 +1974,9 @@ document.addEventListener('click', (e) => {
 // INIT
 // ============================================================
 
+console.log('🏰 3D魔塔 v2 启动中...');
+console.log('  ⚙️ 初始化地图数据...');
+
 // Seed management
 let currentSeed = Date.now().toString(36).slice(-6);
 function regenerateMaps(seed) {
@@ -1978,8 +1993,10 @@ function regenerateMaps(seed) {
 // Press G to generate a random map instead
 
 buildFloor();
+console.log('  🎨 3D场景已构建');
 updatePlayerLight();
 animate();
+console.log('  ✅ 游戏就绪 | 方向键/WASD移动 | G换地图 | 鼠标旋转 | 滚轮缩放');
 
 // G key to regenerate
 const origHandler = window.handleInput;
