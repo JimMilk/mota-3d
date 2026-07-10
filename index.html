@@ -28,40 +28,42 @@
   }
   canvas { display:block; }
   #hud {
-    position: fixed; top: 10px; left: 10px;
+    position: fixed; top: 0; left: 0;
+    height: 100vh;
+    width: 175px;
     background: var(--panel-bg);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 12px 14px;
-    min-width: 180px;
-    max-width: 210px;
+    border-right: 1px solid var(--border);
+    padding: 14px 14px;
     backdrop-filter: blur(12px);
     z-index: 10;
     pointer-events: none;
     font-size: 12px;
-    line-height: 1.4;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
   }
-  #hud .floor { font-size: 13px; color: var(--accent); margin-bottom: 4px; font-weight:600; }
-  #hud .stat-row { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:2px; }
-  #hud .stat { font-size:11px; white-space:nowrap; }
+  #hud .floor { font-size: 14px; color: var(--accent); margin-bottom: 8px; font-weight:600; }
+  #hud .stat { display:flex; justify-content:space-between; padding:3px 0; font-size:13px; }
+  #hud .stat .label { color: var(--text); }
   #hud .stat .val { font-weight:600; }
   #hud .hp .val { color: var(--danger); }
   #hud .atk .val { color: #fab387; }
   #hud .def .val { color: var(--blue); }
   #hud .gold .val { color: var(--accent); }
-  #hud .keys { display:flex; gap:10px; font-size:11px; margin-bottom:4px; }
-  #hud .key { display:flex; align-items:center; gap:3px; }
+  #hud .keys { margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--border); display:flex; gap:12px; font-size:12px; }
+  #hud .key { display:flex; align-items:center; gap:4px; }
   .key-dot { width:10px; height:10px; border-radius:50%; }
   .key-dot.yellow { background:#f5c842; box-shadow:0 0 6px #f5c842; }
   .key-dot.blue { background:#89b4fa; box-shadow:0 0 6px #89b4fa; }
   .key-dot.red { background:#f38ba8; box-shadow:0 0 6px #f38ba8; }
 
-  #hud .hud-section { margin-top:6px; padding-top:6px; border-top:1px solid var(--border); }
-  #hud .section-title { font-size:10px; color:#9399b2; margin-bottom:3px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; }
-  #hud .inventory-grid { display:flex; flex-wrap:wrap; gap:3px; min-height:16px; }
-  #hud .inv-item { font-size:13px; line-height:1; opacity:0.85; }
-  #hud .history-list { max-height:60px; overflow-y:hidden; }
-  #hud .history-entry { font-size:10px; color:#9399b2; padding:1px 0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #hud .hud-section { margin-top:8px; padding-top:8px; border-top:1px solid var(--border); flex-shrink:0; }
+  #hud .hud-section.history { flex:1; overflow:hidden; display:flex; flex-direction:column; min-height:0; }
+  #hud .section-title { font-size:10px; color:#9399b2; margin-bottom:4px; font-weight:600; letter-spacing:0.5px; }
+  #hud .inventory-grid { display:flex; flex-wrap:wrap; gap:3px; min-height:18px; }
+  #hud .inv-item { font-size:14px; line-height:1; opacity:0.9; }
+  #hud .history-list { flex:1; overflow-y:auto; min-height:0; }
+  #hud .history-entry { font-size:10px; color:#9399b2; padding:1px 0; word-break:break-all; line-height:1.3; }
   #hud .history-entry:first-child { color:#cdd6f4; }
 
   #minimap {
@@ -143,8 +145,8 @@
   #victory-overlay p { color: var(--text); font-size: 15px; }
 
   #controls-hint {
-    position: fixed; bottom: 16px; left: 16px;
-    font-size: 11px; color: #585b70;
+    position: fixed; bottom: 10px; left: 185px;
+    font-size: 10px; color: #585b70;
     z-index: 10;
     pointer-events: none;
   }
@@ -164,22 +166,20 @@
 
 <div id="hud">
   <div class="floor" id="floor-label">第 1 层</div>
-  <div class="stat-row">
-    <span class="stat hp">❤️ <span class="val" id="hp-val">400</span></span>
-    <span class="stat atk">⚔️ <span class="val" id="atk-val">10</span></span>
-    <span class="stat def">🛡️ <span class="val" id="def-val">10</span></span>
-    <span class="stat gold">💰 <span class="val" id="gold-val">0</span></span>
-  </div>
+  <div class="stat hp"><span class="label">❤️ 生命</span><span class="val" id="hp-val">400</span></div>
+  <div class="stat atk"><span class="label">⚔️ 攻击</span><span class="val" id="atk-val">10</span></div>
+  <div class="stat def"><span class="label">🛡️ 防御</span><span class="val" id="def-val">10</span></div>
+  <div class="stat gold"><span class="label">💰 金币</span><span class="val" id="gold-val">0</span></div>
   <div class="keys">
-    <div class="key"><span class="key-dot yellow"></span><span id="yk-val">1</span></div>
-    <div class="key"><span class="key-dot blue"></span><span id="bk-val">0</span></div>
-    <div class="key"><span class="key-dot red"></span><span id="rk-val">0</span></div>
+    <div class="key"><span class="key-dot yellow"></span> <span id="yk-val">1</span></div>
+    <div class="key"><span class="key-dot blue"></span> <span id="bk-val">0</span></div>
+    <div class="key"><span class="key-dot red"></span> <span id="rk-val">0</span></div>
   </div>
-  <div class="hud-section" id="inventory-section">
+  <div class="hud-section">
     <div class="section-title">📦 背包</div>
     <div class="inventory-grid" id="inventory-grid"></div>
   </div>
-  <div class="hud-section" id="history-section">
+  <div class="hud-section history">
     <div class="section-title">📜 记录</div>
     <div class="history-list" id="history-list"></div>
   </div>
@@ -388,7 +388,7 @@ scene.background = new THREE.Color(0x0a0a14);
 scene.fog = new THREE.Fog(0x0a0a14, 8, 30);
 
 const camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.5, 60);
-camera.position.set(8, 12, 14);
+camera.position.set(8, 9, 14);
 camera.lookAt(SIZE/2, 0, SIZE/2);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -504,8 +504,8 @@ function buildFloor() {
   const map = MAPS[state.floor];
   const floor = state.floor;
 
-  // Low pillars — visible from above, don't block sightlines
-  const wallGeo = new THREE.BoxGeometry(0.38, 0.35, 0.38);
+  // Low pillars — wider footprint, visible at current camera height
+  const wallGeo = new THREE.BoxGeometry(0.38, 0.75, 0.38);
   const doorGeo = new THREE.BoxGeometry(0.85, 0.35, 0.12);
   const half = 0.5;
 
@@ -520,18 +520,18 @@ function buildFloor() {
         if (isHiddenWall(floor, x, y)) {
           const hwMat = new THREE.MeshStandardMaterial({ color: 0x2a2a3a, roughness: 0.9, metalness: 0.05, transparent:true, opacity: 0.55 });
           const mesh = new THREE.Mesh(wallGeo, hwMat);
-          mesh.position.set(pos.x, 0.18, pos.z);
+          mesh.position.set(pos.x, 0.38, pos.z);
           mesh.castShadow = true;
           dynGroup.add(mesh);
           wallMeshes[key(x,y)] = mesh;
         } else {
           const mesh = new THREE.Mesh(wallGeo, matWall);
-          mesh.position.set(pos.x, 0.18, pos.z);
+          mesh.position.set(pos.x, 0.38, pos.z);
           mesh.castShadow = true;
           // Top cap
           const capGeo = new THREE.BoxGeometry(0.42, 0.06, 0.42);
           const cap = new THREE.Mesh(capGeo, matWall);
-          cap.position.y = 0.20;
+          cap.position.y = 0.41;
           mesh.add(cap);
           dynGroup.add(mesh);
           wallMeshes[key(x,y)] = mesh;
@@ -1440,7 +1440,7 @@ renderer.domElement.addEventListener('pointerup', () => { setTimeout(() => { con
 
 function resetCamera() {
   controls.target.set(SIZE/2, 0, SIZE/2);
-  camera.position.set(8, 12, 14);
+  camera.position.set(8, 9, 14);
   camera.lookAt(SIZE/2, 0, SIZE/2);
   controls.update();
 }
