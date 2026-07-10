@@ -1186,6 +1186,7 @@ function canWalk(x, y) {
 function moveTo(nx, ny) {
   if (isMoving) return;
   const walkResult = canWalk(nx, ny);
+  document.getElementById('game-status').textContent = `🔍 (${nx},${ny}): ${walkResult}`;
 
   if (walkResult === false) return;
 
@@ -1527,6 +1528,7 @@ function handleInput() {
   keys['ArrowRight'] = keys['d'] = keys['D'] = false;
 
   moveTo(state.px + dx, state.py + dy);
+  document.getElementById('game-status').textContent = `🎯 →${state.px},${state.py}`;
 }
 
 // Battle panel buttons
