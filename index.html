@@ -274,6 +274,16 @@
 }
 </script>
 
+<script>
+// Error detection (must be before module script to catch import failures)
+window.addEventListener('error', function(e) {
+  var el = document.getElementById('game-status');
+  if (!el) return;
+  var tag = e.target && e.target.tagName;
+  el.textContent = '❌' + (tag === 'SCRIPT' || tag === 'LINK' ? tag : 'L'+e.lineno) + ':' + String(e.message||e.error||(e.target&&e.target.src)||'?').slice(0,50);
+}, true);
+</script>
+
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -282,9 +292,6 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 window.onerror = (msg, src, line) => {
   document.getElementById('game-status').textContent = '❌L'+line+':'+String(msg).slice(0,50);
 };
-window.addEventListener('unhandledrejection', (e) => {
-  document.getElementById('game-status').textContent = '❌PR:'+String(e.reason).slice(0,50);
-});
 
 // ============================================================
 // GAME DATA
