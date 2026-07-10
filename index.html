@@ -296,6 +296,7 @@ const MONSTER_DB = {
   5: { name:'骷髅法师', hp:120, atk:60, def:8, atkSpeed:0.6, gold:10, color:0x8888cc },
   6: { name:'初级守卫', hp:200, atk:50, def:20, atkSpeed:0.55, gold:15, color:0xff8833 },
   7: { name:'石像鬼(Boss)', hp:350, atk:70, def:25, atkSpeed:0.45, gold:100, color:0xff2222 },
+};
 
 // ============================================================
 // EQUIPMENT DEFINITIONS
@@ -436,41 +437,13 @@ const FLOOR_0_START = [5,9];
 // EQUIPMENT DEFINITIONS
 // ============================================================
 
-const EQUIPMENT = {
-  'dragon_spear':{name:'龙脊',slot:'weapon',hands:2,atk:18,atkSpeed:-0.15,critRate:0,critDmg:0.4,missChance:-0.03,stunChance:0.08,icon:'🔱',desc:'双手长枪·龙纹戟身'},
-  'frost_edge':{name:'霜咬',slot:'weapon',hands:1,atk:12,atkSpeed:0.1,critRate:0.03,critDmg:0.2,missChance:0,stunChance:0.02,icon:'🗡️',desc:'单手剑·刃带寒光'},
-  'earth_splitter':{name:'裂地',slot:'weapon',hands:2,atk:22,atkSpeed:-0.25,critRate:0.02,critDmg:0.5,missChance:0.02,stunChance:0.05,icon:'⚔️',desc:'双手巨剑·势沉力猛'},
-  'bone_crusher':{name:'碎骨',slot:'weapon',hands:1,atk:10,atkSpeed:0.05,critRate:0.05,critDmg:0.15,missChance:-0.02,stunChance:0.06,icon:'🔨',desc:'单手钉锤·破甲碎骨'},
-  'thunder_hammer':{name:'雷霆',slot:'weapon',hands:2,atk:25,atkSpeed:-0.3,critRate:0.08,critDmg:0.35,missChance:0.05,stunChance:0.12,icon:'⚡',desc:'双手战锤·一击入魂'},
-  'tower_shield':{name:'塔盾',slot:'shield',hands:1,atk:0,atkSpeed:-0.1,critRate:-0.02,critDmg:0,def:15,missChance:0.03,enemyMissChance:0.08,stunChance:-0.03,icon:'🛡️',desc:'重盾·牢不可破'},
-  'round_buckler':{name:'圆盾',slot:'shield',hands:0,atk:0,atkSpeed:0.05,critRate:0.02,critDmg:0,def:8,missChance:-0.01,enemyMissChance:0.04,stunChance:0,icon:'🛡️',desc:'轻盾·攻守兼备'},
-  'shadow_leather':{name:'影皮甲',slot:'armor',hands:0,atk:0,atkSpeed:0.1,critRate:0,critDmg:0,def:6,missChance:-0.04,enemyMissChance:0.03,icon:'🧥',desc:'皮甲·来去如风'},
-  'chainmail':{name:'锁子甲',slot:'armor',hands:0,atk:0,atkSpeed:-0.05,critRate:0,critDmg:0,def:12,missChance:0,enemyMissChance:0.06,icon:'🦺',desc:'链甲·攻防均衡'},
-  'dragon_plate':{name:'龙骨甲',slot:'armor',hands:0,atk:0,atkSpeed:-0.15,critRate:0,critDmg:0,def:20,missChance:0.02,enemyMissChance:0.1,icon:'🛡️',desc:'龙鳞重甲·坚不可摧'},
-};
-const BOSS_DROPS = ['dragon_spear','thunder_hammer','tower_shield'];
+
+
 
 // Computed stats from equipment
-function getStats() {
-  let atk=state.baseAtk,spd=state.atkSpeed,crit=state.critRate,cdmg=state.critDmg,
-      def=state.baseDef,miss=state.missChance,stun=state.stunChance,eMiss=state.enemyMissChance;
-  for(const eq of [state.weapon,state.shield,state.armor]){
-    if(!eq)continue;
-    atk+=eq.atk||0;spd+=eq.atkSpeed||0;crit+=eq.critRate||0;cdmg+=eq.critDmg||0;
-    def+=eq.def||0;miss+=eq.missChance||0;stun+=(eq.stunChance||0);eMiss+=(eq.enemyMissChance||0);
-  }
-  return{atk:Math.max(0,atk),atkSpeed:Math.max(0.3,spd),critRate:Math.min(0.8,Math.max(0,crit)),
-    critDmg:Math.max(1.2,cdmg),def:Math.max(0,def),missChance:Math.min(0.5,Math.max(0,miss)),
-    stunChance:Math.min(0.5,Math.max(0,stun)),enemyMissChance:Math.min(0.5,Math.max(0,eMiss))};
-}
+
 
 // Item types
-const ITEM = {
-  RED_GEM: 'rg', BLUE_GEM: 'bg', RED_POTION: 'rp', BLUE_POTION: 'bp',
-  YELLOW_KEY: 'yk', BLUE_KEY: 'bk', RED_KEY: 'rk',
-};
-
-
 // Maze-style corridor maps — UP(9) and DOWN(8) paired across floors
 // ============================================================
 // GAME STATE
@@ -1302,7 +1275,7 @@ function updateMonsterLabels() {
   }
 }
 
-function moveTo(nx, ny) {function moveTo(nx, ny) {
+function moveTo(nx, ny) {
   if (isMoving) return;
   const walkResult = canWalk(nx, ny);
 
