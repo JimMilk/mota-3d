@@ -1259,7 +1259,8 @@ function goToFloor(newFloor) {
 
   // Transition animation
   const trans = document.getElementById('floor-transition');
-  trans.textContent = `⬆ 进入第 ${newFloor + 1} 层`;
+  const dir = newFloor > state.floor ? '⬆' : '⬇';
+  trans.textContent = `${dir} 进入第 ${newFloor + 1} 层`;
   trans.style.display = 'flex';
   setTimeout(() => { trans.style.display = 'none'; }, 800);
 
