@@ -199,8 +199,18 @@
   <div class="stat">
     <span class="label">⭐ 积分</span><span class="val" id="score-val" style="color:var(--accent);">0</span>
   </div>
+  <div class="equip-slots">
+    <div class="section-title">⚔️ 装备</div>
+    <div class="eq-slot" id="eq-weapon" onclick="clickEquipSlot('weapon')"><span class="slot-label">武器</span><span style="color:#585b70">空</span></div>
+    <div class="eq-slot" id="eq-shield" onclick="clickEquipSlot('shield')"><span class="slot-label">盾牌</span><span style="color:#585b70">空</span></div>
+    <div class="eq-slot" id="eq-armor" onclick="clickEquipSlot('armor')"><span class="slot-label">护甲</span><span style="color:#585b70">空</span></div>
+  </div>
   <div class="hud-section">
-    <div class="section-title">📦 背包</div>
+    <div class="section-title">🎒 装备包</div>
+    <div class="equip-inv" id="equip-inv"></div>
+  </div>
+  <div class="hud-section">
+    <div class="section-title">📦 道具</div>
     <div class="inventory-grid" id="inventory-grid"></div>
   </div>
   <div class="hud-section history">
@@ -251,6 +261,7 @@
 </script>
 
 <script type="module">
+
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
@@ -263,14 +274,180 @@ const SIZE = 11; // 11x11 grid
 
 // Monster definitions: [name, hp, atk, def, gold, color]
 const MONSTER_DB = {
-  1: { name:'绿色史莱姆', hp:50,  atk:20, def:1,  gold:1,  color:0x44cc44 },
-  2: { name:'红色史莱姆', hp:70,  atk:15, def:2,  gold:2,  color:0xcc3333 },
-  3: { name:'小蝙蝠',     hp:100, atk:20, def:5,  gold:3,  color:0x666688 },
-  4: { name:'骷髅兵',     hp:150, atk:40, def:10, gold:8,  color:0xcccccc },
-  5: { name:'骷髅法师',   hp:120, atk:60, def:8,  gold:10, color:0x8888cc },
-  6: { name:'初级守卫',   hp:200, atk:50, def:20, gold:15, color:0xff8833 },
-  7: { name:'石像鬼(Boss)', hp:350, atk:70, def:25, gold:100, color:0xff2222 },
+  1: { name:'绿色史莱姆', hp:50, atk:20, def:1, atkSpeed:0.8, gold:1, color:0x44cc44 },
+  2: { name:'红色史莱姆', hp:70, atk:15, def:2, atkSpeed:0.85, gold:2, color:0xcc3333 },
+  3: { name:'小蝙蝠', hp:100, atk:20, def:5, atkSpeed:1.2, gold:3, color:0x666688 },
+  4: { name:'骷髅兵', hp:150, atk:40, def:10, atkSpeed:0.7, gold:8, color:0xcccccc },
+  5: { name:'骷髅法师', hp:120, atk:60, def:8, atkSpeed:0.6, gold:10, color:0x8888cc },
+  6: { name:'初级守卫', hp:200, atk:50, def:20, atkSpeed:0.55, gold:15, color:0xff8833 },
+  7: { name:'石像鬼(Boss)', hp:350, atk:70, def:25, atkSpeed:0.45, gold:100, color:0xff2222 },
+
+// ============================================================
+// EQUIPMENT DEFINITIONS
+// ============================================================
+
+const EQUIPMENT = {
+  'dragon_spear':{name:'龙脊',slot:'weapon',hands:2,atk:18,atkSpeed:-0.15,critRate:0,critDmg:0.4,missChance:-0.03,stunChance:0.08,icon:'🔱',desc:'双手长枪·龙纹戟身'},
+  'frost_edge':{name:'霜咬',slot:'weapon',hands:1,atk:12,atkSpeed:0.1,critRate:0.03,critDmg:0.2,missChance:0,stunChance:0.02,icon:'🗡️',desc:'单手剑·刃带寒光'},
+  'earth_splitter':{name:'裂地',slot:'weapon',hands:2,atk:22,atkSpeed:-0.25,critRate:0.02,critDmg:0.5,missChance:0.02,stunChance:0.05,icon:'⚔️',desc:'双手巨剑·势沉力猛'},
+  'bone_crusher':{name:'碎骨',slot:'weapon',hands:1,atk:10,atkSpeed:0.05,critRate:0.05,critDmg:0.15,missChance:-0.02,stunChance:0.06,icon:'🔨',desc:'单手钉锤·破甲碎骨'},
+  'thunder_hammer':{name:'雷霆',slot:'weapon',hands:2,atk:25,atkSpeed:-0.3,critRate:0.08,critDmg:0.35,missChance:0.05,stunChance:0.12,icon:'⚡',desc:'双手战锤·一击入魂'},
+  'tower_shield':{name:'塔盾',slot:'shield',hands:1,atk:0,atkSpeed:-0.1,critRate:-0.02,critDmg:0,def:15,missChance:0.03,enemyMissChance:0.08,stunChance:-0.03,icon:'🛡️',desc:'重盾·牢不可破'},
+  'round_buckler':{name:'圆盾',slot:'shield',hands:0,atk:0,atkSpeed:0.05,critRate:0.02,critDmg:0,def:8,missChance:-0.01,enemyMissChance:0.04,stunChance:0,icon:'🛡️',desc:'轻盾·攻守兼备'},
+  'shadow_leather':{name:'影皮甲',slot:'armor',hands:0,atk:0,atkSpeed:0.1,critRate:0,critDmg:0,def:6,missChance:-0.04,enemyMissChance:0.03,icon:'🧥',desc:'皮甲·来去如风'},
+  'chainmail':{name:'锁子甲',slot:'armor',hands:0,atk:0,atkSpeed:-0.05,critRate:0,critDmg:0,def:12,missChance:0,enemyMissChance:0.06,icon:'🦺',desc:'链甲·攻防均衡'},
+  'dragon_plate':{name:'龙骨甲',slot:'armor',hands:0,atk:0,atkSpeed:-0.15,critRate:0,critDmg:0,def:20,missChance:0.02,enemyMissChance:0.1,icon:'🛡️',desc:'龙鳞重甲·坚不可摧'},
 };
+const BOSS_DROPS = ['dragon_spear','thunder_hammer','tower_shield'];
+
+// Computed stats from equipment
+function getStats() {
+  let atk=state.baseAtk,spd=state.atkSpeed,crit=state.critRate,cdmg=state.critDmg,
+      def=state.baseDef,miss=state.missChance,stun=state.stunChance,eMiss=state.enemyMissChance;
+  for(const eq of [state.weapon,state.shield,state.armor]){
+    if(!eq)continue;
+    atk+=eq.atk||0;spd+=eq.atkSpeed||0;crit+=eq.critRate||0;cdmg+=eq.critDmg||0;
+    def+=eq.def||0;miss+=eq.missChance||0;stun+=(eq.stunChance||0);eMiss+=(eq.enemyMissChance||0);
+  }
+  return{atk:Math.max(0,atk),atkSpeed:Math.max(0.3,spd),critRate:Math.min(0.8,Math.max(0,crit)),
+    critDmg:Math.max(1.2,cdmg),def:Math.max(0,def),missChance:Math.min(0.5,Math.max(0,miss)),
+    stunChance:Math.min(0.5,Math.max(0,stun)),enemyMissChance:Math.min(0.5,Math.max(0,eMiss))};
+}
+
+// Item types
+const ITEM = {
+  RED_GEM: 'rg', BLUE_GEM: 'bg', RED_POTION: 'rp', BLUE_POTION: 'bp',
+  YELLOW_KEY: 'yk', BLUE_KEY: 'bk', RED_KEY: 'rk',
+};
+
+
+
+// ===== AUTO-GENERATED DATA =====
+let MAPS = [
+  [
+    [1,1,1,1,1,1,1,1,1,1,1],
+    [1,0,0,0,0,9,0,0,0,0,1],
+    [1,0,1,1,0,0,0,1,1,0,1],
+    [1,0,1,0,0,1,0,0,1,0,1],
+    [1,0,0,0,2,1,0,0,0,0,1],
+    [1,1,1,0,1,1,0,1,1,1,1],
+    [1,0,0,0,0,0,0,0,0,0,1],
+    [1,0,1,1,1,0,1,1,1,0,1],
+    [1,0,0,0,0,0,0,0,0,0,1],
+    [1,0,0,1,0,0,0,1,0,0,1],
+    [1,1,1,1,1,1,1,1,1,1,1]
+  ],
+  [
+    [1,1,1,1,1,1,1,1,1,1,1],
+    [1,0,0,0,0,8,0,0,0,0,1],
+    [1,0,1,1,0,0,0,1,1,0,1],
+    [1,0,0,0,0,1,0,0,0,0,1],
+    [1,1,1,0,2,1,1,1,1,0,1],
+    [1,0,0,0,0,0,0,0,0,9,1],
+    [1,0,1,1,1,0,1,1,1,1,1],
+    [1,0,0,0,0,0,0,0,0,0,1],
+    [1,1,1,0,1,3,1,1,1,0,1],
+    [1,0,0,0,0,0,0,0,0,0,1],
+    [1,1,1,1,1,1,1,1,1,1,1]
+  ],
+  [
+    [1,1,1,1,1,1,1,1,1,1,1],
+    [1,0,0,0,0,0,1,0,0,0,1],
+    [1,0,1,1,1,0,0,0,1,0,1],
+    [1,0,0,0,0,0,1,0,1,0,1],
+    [1,1,1,0,1,0,1,0,3,0,1],
+    [1,9,0,0,2,0,0,0,1,8,1],
+    [1,1,1,0,1,1,1,0,1,1,1],
+    [1,0,0,0,0,0,0,0,0,0,1],
+    [1,0,1,1,1,0,1,1,1,0,1],
+    [1,0,0,0,0,0,0,0,0,0,1],
+    [1,1,1,1,1,1,1,1,1,1,1]
+  ],
+  [
+    [1,1,1,1,1,1,1,1,1,1,1],
+    [1,0,0,0,0,0,0,0,0,0,1],
+    [1,0,1,1,1,0,1,1,1,0,1],
+    [1,0,0,0,0,0,0,0,0,0,1],
+    [1,1,1,0,1,4,1,1,1,0,1],
+    [1,8,0,0,0,0,0,0,0,0,1],
+    [1,1,1,0,1,1,1,0,1,1,1],
+    [1,0,0,0,0,0,0,0,0,0,1],
+    [1,0,1,1,1,0,1,1,1,0,1],
+    [1,0,0,0,0,9,0,0,0,0,1],
+    [1,1,1,1,1,1,1,1,1,1,1]
+  ],
+  [
+    [1,1,1,1,1,1,1,1,1,1,1],
+    [1,0,0,0,0,0,0,0,0,0,1],
+    [1,0,1,1,0,4,1,1,1,0,1],
+    [1,0,0,0,0,0,0,0,0,0,1],
+    [1,0,1,1,1,0,1,1,1,0,1],
+    [1,0,0,0,0,0,0,0,0,0,1],
+    [1,0,1,1,1,0,1,1,1,0,1],
+    [1,0,0,0,0,0,0,0,0,0,1],
+    [1,0,1,1,1,0,1,1,1,0,1],
+    [1,0,0,0,0,8,0,0,0,0,1],
+    [1,1,1,1,1,1,1,1,1,1,1]
+  ]
+];
+let MONSTERS = [
+  [[1,6,2],[1,3,6],[1,4,9],[2,2,8],[2,1,9],[1,2,6]],
+  [[2,6,7],[2,1,2],[3,7,5],[3,4,5],[1,7,7],[1,5,7],[4,7,1]],
+  [[3,1,9],[3,9,1],[4,8,7],[4,5,4],[5,3,9],[5,7,2],[2,7,7]],
+  [[4,1,8],[4,7,5],[5,1,7],[5,7,7],[6,5,5],[6,4,1],[6,9,5],[3,9,7]],
+  [[6,6,9],[6,2,3],[6,7,3],[5,5,6],[5,7,7],[5,8,1],[4,9,3],[7,2,1]]
+];
+let ITEMS = [
+  [['rg',4,6],['rp',8,4],['yk',2,9],['yk',9,2],['bk',7,3]],
+  [['bg',5,5],['rg',9,1],['rp',1,9],['bp',9,2],['yk',8,3],['yk',9,4],['yk',8,1],['bk',1,5]],
+  [['rg',8,9],['rg',6,2],['rg',2,9],['bg',7,5],['bg',7,1],['bg',9,9],['rp',8,1],['rp',9,2],['rp',4,9],['bp',5,3],['bp',5,2],['yk',4,1],['yk',6,7],['yk',7,6],['bk',9,7],['bk',5,8],['rk',6,9]],
+  [['rg',5,7],['rg',9,3],['rg',1,3],['rg',1,9],['bg',5,1],['bg',4,3],['bg',8,1],['rp',5,8],['rp',2,5],['rp',2,9],['bp',2,7],['bp',3,1],['yk',3,4],['yk',9,1],['yk',8,7],['yk',9,9],['bk',9,8],['bk',6,7],['rk',7,9]],
+  [['rg',9,7],['rg',4,1],['rg',3,3],['bg',2,9],['bg',6,1],['bg',1,5],['rp',9,2],['rp',3,9],['rp',9,5],['bp',1,7],['bp',5,7],['yk',9,9],['yk',7,9],['yk',3,5],['bk',1,3],['rk',6,5]]
+];
+let HIDDEN_WALLS = [
+  [0,2,2],
+  [1,3,2],
+  [2,2,2],
+  [3,2,2],
+];
+const CHESTS = [
+  [0,1,2,'frost_edge'],
+  [1,4,2,'round_buckler'],
+  [2,1,2,'chainmail'],
+  [3,1,2,'dragon_plate'],
+];
+const FLOOR_0_START = [5,9];
+// ============================================================
+// EQUIPMENT DEFINITIONS
+// ============================================================
+
+const EQUIPMENT = {
+  'dragon_spear':{name:'龙脊',slot:'weapon',hands:2,atk:18,atkSpeed:-0.15,critRate:0,critDmg:0.4,missChance:-0.03,stunChance:0.08,icon:'🔱',desc:'双手长枪·龙纹戟身'},
+  'frost_edge':{name:'霜咬',slot:'weapon',hands:1,atk:12,atkSpeed:0.1,critRate:0.03,critDmg:0.2,missChance:0,stunChance:0.02,icon:'🗡️',desc:'单手剑·刃带寒光'},
+  'earth_splitter':{name:'裂地',slot:'weapon',hands:2,atk:22,atkSpeed:-0.25,critRate:0.02,critDmg:0.5,missChance:0.02,stunChance:0.05,icon:'⚔️',desc:'双手巨剑·势沉力猛'},
+  'bone_crusher':{name:'碎骨',slot:'weapon',hands:1,atk:10,atkSpeed:0.05,critRate:0.05,critDmg:0.15,missChance:-0.02,stunChance:0.06,icon:'🔨',desc:'单手钉锤·破甲碎骨'},
+  'thunder_hammer':{name:'雷霆',slot:'weapon',hands:2,atk:25,atkSpeed:-0.3,critRate:0.08,critDmg:0.35,missChance:0.05,stunChance:0.12,icon:'⚡',desc:'双手战锤·一击入魂'},
+  'tower_shield':{name:'塔盾',slot:'shield',hands:1,atk:0,atkSpeed:-0.1,critRate:-0.02,critDmg:0,def:15,missChance:0.03,enemyMissChance:0.08,stunChance:-0.03,icon:'🛡️',desc:'重盾·牢不可破'},
+  'round_buckler':{name:'圆盾',slot:'shield',hands:0,atk:0,atkSpeed:0.05,critRate:0.02,critDmg:0,def:8,missChance:-0.01,enemyMissChance:0.04,stunChance:0,icon:'🛡️',desc:'轻盾·攻守兼备'},
+  'shadow_leather':{name:'影皮甲',slot:'armor',hands:0,atk:0,atkSpeed:0.1,critRate:0,critDmg:0,def:6,missChance:-0.04,enemyMissChance:0.03,icon:'🧥',desc:'皮甲·来去如风'},
+  'chainmail':{name:'锁子甲',slot:'armor',hands:0,atk:0,atkSpeed:-0.05,critRate:0,critDmg:0,def:12,missChance:0,enemyMissChance:0.06,icon:'🦺',desc:'链甲·攻防均衡'},
+  'dragon_plate':{name:'龙骨甲',slot:'armor',hands:0,atk:0,atkSpeed:-0.15,critRate:0,critDmg:0,def:20,missChance:0.02,enemyMissChance:0.1,icon:'🛡️',desc:'龙鳞重甲·坚不可摧'},
+};
+const BOSS_DROPS = ['dragon_spear','thunder_hammer','tower_shield'];
+
+// Computed stats from equipment
+function getStats() {
+  let atk=state.baseAtk,spd=state.atkSpeed,crit=state.critRate,cdmg=state.critDmg,
+      def=state.baseDef,miss=state.missChance,stun=state.stunChance,eMiss=state.enemyMissChance;
+  for(const eq of [state.weapon,state.shield,state.armor]){
+    if(!eq)continue;
+    atk+=eq.atk||0;spd+=eq.atkSpeed||0;crit+=eq.critRate||0;cdmg+=eq.critDmg||0;
+    def+=eq.def||0;miss+=eq.missChance||0;stun+=(eq.stunChance||0);eMiss+=(eq.enemyMissChance||0);
+  }
+  return{atk:Math.max(0,atk),atkSpeed:Math.max(0.3,spd),critRate:Math.min(0.8,Math.max(0,crit)),
+    critDmg:Math.max(1.2,cdmg),def:Math.max(0,def),missChance:Math.min(0.5,Math.max(0,miss)),
+    stunChance:Math.min(0.5,Math.max(0,stun)),enemyMissChance:Math.min(0.5,Math.max(0,eMiss))};
+}
 
 // Item types
 const ITEM = {
@@ -384,19 +561,19 @@ const FLOOR_0_START = [1,1];
 // ============================================================
 
 const state = {
-  hp: 400,
-  maxHp: 400,
-  atk: 10,
-  def: 10,
+  hp: 400, maxHp: 400,
+  baseAtk: 10, atkSpeed: 1.0, critRate: 0.05, critDmg: 1.5,
+  baseDef: 10, missChance: 0.05, stunChance: 0.03,
+  enemyMissChance: 0,
   gold: 0,
-  yellowKeys: 1,
-  blueKeys: 0,
-  redKeys: 0,
+  yellowKeys: 1, blueKeys: 0, redKeys: 0,
   floor: 0,
-  px: FLOOR_0_START[0],
-  py: FLOOR_0_START[1],
-  steps: 0,
-  monstersKilled: 0,
+  px: FLOOR_0_START[0], py: FLOOR_0_START[1],
+  steps: 0, monstersKilled: 0,
+  // Equipment slots
+  weapon: null, shield: null, armor: null,
+  // Equipment inventory
+  equipInv: [],
 };
 
 // Runtime state per floor (cleared on floor change)
@@ -419,7 +596,7 @@ scene.background = new THREE.Color(0x0a0a14);
 scene.fog = new THREE.Fog(0x0a0a14, 8, 30);
 
 const camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.5, 60);
-camera.position.set(8, 9, 14);
+camera.position.set(8, 7, 14);
 camera.lookAt(SIZE/2, 0, SIZE/2);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -538,7 +715,7 @@ function buildFloor() {
   const floor = state.floor;
 
   // Wall blocks — thick enough to connect with adjacent walls
-  const wallGeo = new THREE.BoxGeometry(0.92, 0.75, 0.92);
+  const wallGeo = new THREE.BoxGeometry(0.92, 0.37, 0.92);
   const doorGeoH = new THREE.BoxGeometry(0.85, 0.35, 0.10); // E-W passage door
   const doorGeoV = new THREE.BoxGeometry(0.10, 0.35, 0.85); // N-S passage door
   const half = 0.5;
@@ -554,18 +731,18 @@ function buildFloor() {
         if (isHiddenWall(floor, x, y)) {
           const hwMat = new THREE.MeshStandardMaterial({ color: 0x2a2a3a, roughness: 0.9, metalness: 0.05, transparent:true, opacity: 0.55 });
           const mesh = new THREE.Mesh(wallGeo, hwMat);
-          mesh.position.set(pos.x, 0.38, pos.z);
+          mesh.position.set(pos.x, 0.19, pos.z);
           mesh.castShadow = true;
           dynGroup.add(mesh);
           wallMeshes[key(x,y)] = mesh;
         } else {
           const mesh = new THREE.Mesh(wallGeo, matWall);
-          mesh.position.set(pos.x, 0.38, pos.z);
+          mesh.position.set(pos.x, 0.19, pos.z);
           mesh.castShadow = true;
           // Top cap
           const capGeo = new THREE.BoxGeometry(0.95, 0.06, 0.95);
           const cap = new THREE.Mesh(capGeo, matWall);
-          cap.position.y = 0.41;
+          cap.position.y = 0.22;
           mesh.add(cap);
           dynGroup.add(mesh);
           wallMeshes[key(x,y)] = mesh;
@@ -680,6 +857,27 @@ function buildFloor() {
     dynGroup.add(mesh);
     monsterMeshes[key(mx, my)] = { mesh, type, data: mData };
     currentMonsters.push({ type, x: mx, y: my, data: mData });
+  }
+
+  // Spawn chests
+  for (const c of CHESTS) {
+    if (c[0] !== floor) continue;
+    const ck = `${c[0]},${c[1]},${c[2]}`;
+    if (openedChests.has(ck)) continue;
+    const chestGroup = new THREE.Group();
+    const chestBody = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.25, 0.3), new THREE.MeshStandardMaterial({color:0x8B6914, roughness:0.4, metalness:0.5}));
+    chestBody.position.y = 0.18;
+    chestBody.castShadow = true;
+    chestGroup.add(chestBody);
+    const chestLid = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.08, 0.32), new THREE.MeshStandardMaterial({color:0xa07820, roughness:0.3, metalness:0.6, emissive:0x221100, emissiveIntensity:0.4}));
+    chestLid.position.y = 0.32;
+    chestGroup.add(chestLid);
+    const pos = gridToWorld(c[1], c[2]);
+    chestGroup.position.set(pos.x, 0, pos.z);
+    chestGroup.userData = { floatOffset: Math.random() * Math.PI * 2, isChest: true };
+    dynGroup.add(chestGroup);
+    itemMeshes[key(c[1],c[2])] = { mesh: chestGroup, type: 'chest' };
+    currentItems.push({ type: 'chest', x: c[1], y: c[2] });
   }
 
   // Spawn items
@@ -1007,127 +1205,172 @@ function addCompassMarkers() {
 // BATTLE SYSTEM
 // ============================================================
 
-function calcBattle(monsterType) {
+function calcBattlePreview(monsterType) {
   const m = MONSTER_DB[monsterType];
-  const pDmg = Math.max(state.atk - m.def, 0);
-  const mDmg = Math.max(m.atk - state.def, 0);
-  if (pDmg <= 0) return { canWin: false, rounds: Infinity, loss: Infinity, mDmg:0, pDmg:0 };
-  const rounds = Math.ceil(m.hp / pDmg);
-  const loss = rounds * mDmg;
-  return {
-    canWin: loss < state.hp,
-    rounds,
-    loss,
-    pDmg,
-    mDmg,
-    monster: m,
-  };
-}
-
-function showBattlePreview(mx, my) {
-  const info = monsterMeshes[key(mx, my)];
-  if (!info) return;
-  const result = calcBattle(info.type);
-
-  const overlay = document.getElementById('battle-overlay');
-  document.getElementById('battle-monster-name').textContent = info.data.name;
-  document.getElementById('battle-calc').textContent =
-    `你的伤害: ${result.pDmg}/回合 · 怪物伤害: ${result.mDmg}/回合 · 共 ${result.rounds} 回合`;
-
-  if (!result.canWin && result.pDmg <= 0) {
-    document.getElementById('battle-loss').textContent = '⚠️ 无法破防！';
-    document.getElementById('battle-remain').textContent = '你的攻击力不足以伤害这个怪物';
-    document.getElementById('btn-fight').style.display = 'none';
-  } else if (!result.canWin) {
-    document.getElementById('battle-loss').textContent = `你将损失 ${result.loss} HP`;
-    document.getElementById('battle-remain').textContent = `⚠️ 生命不足！剩余 HP: ${state.hp}`;
-    document.getElementById('btn-fight').style.display = 'none';
-  } else {
-    document.getElementById('battle-loss').textContent = `你将损失 ${result.loss} HP`;
-    document.getElementById('battle-remain').textContent = `战斗后剩余: ${state.hp - result.loss} HP`;
-    document.getElementById('btn-fight').style.display = '';
-  }
-
-  overlay.classList.add('active');
-  overlay._battleTarget = { x: mx, y: my };
+  const s = getStats();
+  const pDmg = Math.max(s.atk - m.def, 1);
+  const mDmg = Math.max(m.atk - s.def, 1);
+  const avgPDmg = pDmg * (1 + s.critRate * (s.critDmg - 1));
+  const avgRounds = Math.ceil(m.hp / Math.max(1, avgPDmg));
+  const estLoss = Math.round(avgRounds * mDmg * (1 - s.enemyMissChance));
+  return { monster: m, estLoss, pDmg, mDmg, canWin: estLoss < state.hp, s };
 }
 
 function doBattle(mx, my) {
   const info = monsterMeshes[key(mx, my)];
-  if (!info) return;
-  const result = calcBattle(info.type);
-  if (!result.canWin) return;
-
-  // Apply damage
-  state.hp -= result.loss;
-  state.gold += result.monster.gold;
-  state.monstersKilled++;
-
-  // Remove monster from tracking immediately (prevent double-fight)
-  defeatedThisFloor.add(key(mx, my));
-  const mesh = info.mesh;
-  delete monsterMeshes[key(mx, my)];
-  // Death animation: shrink and fade
-  const shrink = { scale: 1 };
-  const animId = setInterval(() => {
-    shrink.scale -= 0.08;
-    mesh.scale.setScalar(Math.max(shrink.scale, 0));
-    if (shrink.scale <= 0) {
-      clearInterval(animId);
-      dynGroup.remove(mesh);
-      delete monsterMeshes[key(mx, my)];
+  if (!info || battleAnimating) return;
+  
+  const m = MONSTER_DB[info.type];
+  const s = getStats();
+  const pRawDmg = Math.max(s.atk - m.def, 1);
+  const mRawDmg = Math.max(m.atk - s.def, 1);
+  
+  // Simulate battle
+  let pHp = state.hp, mHp = m.hp;
+  const log = [];
+  const pInterval = 1.0 / s.atkSpeed;
+  const mInterval = 1.0 / (m.atkSpeed || 0.8);
+  let pNext = 0, mNext = 0;
+  
+  while (pHp > 0 && mHp > 0) {
+    if (pNext <= mNext) {
+      const roll = Math.random();
+      if (roll < s.missChance) {
+        log.push({actor:'player',type:'miss'});
+      } else {
+        const isCrit = roll < s.missChance + s.critRate;
+        const dmg = Math.round(isCrit ? pRawDmg * s.critDmg : pRawDmg);
+        mHp -= dmg;
+        log.push({actor:'player',type:isCrit?'crit':'hit',dmg});
+        if (Math.random() < s.stunChance && mHp > 0) {
+          mNext += 0.6;
+          log.push({actor:'player',type:'stun'});
+        }
+      }
+      pNext += pInterval;
+    } else {
+      const roll = Math.random();
+      if (roll < s.enemyMissChance) {
+        log.push({actor:'monster',type:'miss'});
+      } else {
+        pHp -= mRawDmg;
+        log.push({actor:'monster',type:'hit',dmg:mRawDmg});
+      }
+      mNext += mInterval;
     }
-  }, 30);
-
-  updateHUD();
-  updateMinimap();
-  showMessage(`击败了 ${info.data.name}！失去 ${result.loss} HP，获得 ${result.monster.gold} 金币`, false);
-
-  // Check boss defeat on top floor
-  if (info.type === 7 && state.floor === MAPS.length - 1) {
-    setTimeout(() => {
-      document.getElementById('victory-overlay').classList.add('active');
-    }, 600);
   }
-
-  // Check death
-  if (state.hp <= 0) {
-    state.hp = 0;
+  
+  const won = mHp <= 0;
+  const loss = state.hp - Math.max(0, pHp);
+  
+  if (!won) {
+    showMessage('⚠️ 战斗力不足！先提升属性再来', true);
+    return;
+  }
+  
+  // Apply damage and rewards
+  state.hp = Math.max(0, pHp);
+  state.gold += m.gold;
+  state.monstersKilled++;
+  
+  // Animate battle log
+  battleAnimating = true;
+  animateBattleLog(log, info.mesh, () => {
+    // Remove monster
+    defeatedThisFloor.add(key(mx, my));
+    delete monsterMeshes[key(mx, my)];
+    dynGroup.remove(info.mesh);
+    battleAnimating = false;
     updateHUD();
-    setTimeout(() => alert('💀 你倒下了...刷新页面重新开始。'), 500);
+    updateMinimap();
+    updateMonsterLabels();
+    showMessage(`击败${m.name}！损失 ${loss} HP`, false);
+    
+    // Boss check
+    if (info.type === 7 && state.floor === MAPS.length - 1) {
+      setTimeout(() => document.getElementById('victory-overlay').classList.add('active'), 600);
+    }
+    // Boss drop
+    if (info.type === 7) {
+      const dropId = BOSS_DROPS[Math.floor(Math.random() * BOSS_DROPS.length)];
+      state.equipInv.push(dropId);
+      showMessage(`🎁 Boss掉落: ${EQUIPMENT[dropId].icon} ${EQUIPMENT[dropId].name}`, false);
+    }
+    // Random equipment drop (5% chance)
+    if (Math.random() < 0.05 && info.type >= 4) {
+      const pool = ['frost_edge','bone_crusher','round_buckler','shadow_leather','chainmail'];
+      const dropId = pool[Math.floor(Math.random() * pool.length)];
+      state.equipInv.push(dropId);
+      showMessage(`🎁 掉落装备: ${EQUIPMENT[dropId].icon} ${EQUIPMENT[dropId].name}`, false);
+    }
+    
+    if (state.hp <= 0) {
+      setTimeout(() => alert('💀 你倒下了...刷新页面重新开始。'), 500);
+    }
+  });
+}
+
+function animateBattleLog(log, monsterMesh, onDone) {
+  let i = 0;
+  const interval = setInterval(() => {
+    if (i >= log.length || !monsterMesh.parent) {
+      clearInterval(interval);
+      if (onDone) onDone();
+      return;
+    }
+    const entry = log[i];
+    const worldPos = monsterMesh.position.clone();
+    worldPos.y += 1.2;
+    const screenPos = worldPos.clone().project(camera);
+    const sx = (screenPos.x * 0.5 + 0.5) * window.innerWidth;
+    const sy = (-screenPos.y * 0.5 + 0.5) * window.innerHeight;
+    
+    let text, color;
+    if (entry.actor === 'player') {
+      if (entry.type === 'miss') { text = 'MISS'; color = '#888'; }
+      else if (entry.type === 'crit') { text = `💥${entry.dmg}`; color = '#ff0'; }
+      else if (entry.type === 'stun') { text = '⚡眩晕'; color = '#8af'; }
+      else { text = `-${entry.dmg}`; color = '#fff'; }
+    } else {
+      if (entry.type === 'miss') { text = '闪避'; color = '#8f8'; }
+      else { text = `-${entry.dmg}`; color = '#f66'; }
+    }
+    
+    const el = document.createElement('div');
+    el.className = 'float-text';
+    el.textContent = text;
+    el.style.color = color;
+    el.style.left = sx + 'px';
+    el.style.top = sy + 'px';
+    el.style.fontWeight = entry.type === 'crit' ? '900' : '600';
+    el.style.fontSize = entry.type === 'crit' ? '20px' : '14px';
+    document.body.appendChild(el);
+    requestAnimationFrame(() => { el.style.transform = 'translateY(-36px)'; el.style.opacity = '0'; });
+    setTimeout(() => el.remove(), 900);
+    
+    i++;
+  }, 180);
+}
+
+function updateMonsterLabels() {
+  document.querySelectorAll('.monster-hp-label').forEach(el => el.remove());
+  for (const info of Object.values(monsterMeshes)) {
+    const preview = calcBattlePreview(info.type);
+    const worldPos = info.mesh.position.clone();
+    worldPos.y += 1.1;
+    const screenPos = worldPos.clone().project(camera);
+    const sx = (screenPos.x * 0.5 + 0.5) * window.innerWidth;
+    const sy = (-screenPos.y * 0.5 + 0.5) * window.innerHeight;
+    const label = document.createElement('div');
+    label.className = 'monster-hp-label';
+    label.innerHTML = `<span style="color:${preview.canWin?'#ff6666':'#888'}">${preview.canWin ? '-'+preview.estLoss+'HP' : '⚠️'}</span>`;
+    label.style.left = sx + 'px';
+    label.style.top = (sy - 24) + 'px';
+    document.body.appendChild(label);
   }
 }
 
-// ============================================================
-// MOVEMENT & INTERACTION
-// ============================================================
-
-let isMoving = false;
-
-function canWalk(x, y) {
-  const map = MAPS[state.floor];
-  if (x < 0 || x >= SIZE || y < 0 || y >= SIZE) return false;
-  const tile = map[y][x];
-
-  // Check for walls (including hidden walls)
-  if (tile === TILE.WALL && !isHiddenWall(state.floor, x, y)) return false;
-  // Hidden walls ARE walkable
-  if (tile === TILE.WALL && isHiddenWall(state.floor, x, y)) return true;
-
-  // Check doors
-  if (tile === TILE.YELLOW_DOOR && state.yellowKeys > 0) return 'yellow_door';
-  if (tile === TILE.BLUE_DOOR && state.blueKeys > 0) return 'blue_door';
-  if (tile === TILE.RED_DOOR && state.redKeys > 0) return 'red_door';
-  if (tile === TILE.YELLOW_DOOR || tile === TILE.BLUE_DOOR || tile === TILE.RED_DOOR) return 'locked';
-
-  // Check monsters
-  if (monsterMeshes[key(x, y)]) return 'monster';
-
-  if (tile === TILE.WALL) return false;
-  return true;
-}
-
-function moveTo(nx, ny) {
+function moveTo(nx, ny) {function moveTo(nx, ny) {
   if (isMoving) return;
   const walkResult = canWalk(nx, ny);
 
@@ -1139,7 +1382,7 @@ function moveTo(nx, ny) {
   }
 
   if (walkResult === 'monster') {
-    showBattlePreview(nx, ny);
+    doBattle(nx, ny);
     return;
   }
 
@@ -1170,6 +1413,9 @@ function moveTo(nx, ny) {
   // Check stairs
   checkStairs(nx, ny);
 
+  // Check chests
+  openChestIfPresent(nx, ny);
+
   // Check hidden wall discovery
   if (isHiddenWall(state.floor, nx, ny)) {
     showMessage('🔍 发现了隐藏通道！', false);
@@ -1190,6 +1436,7 @@ function pickupItems(x, y) {
   if (!itemMeshes[ik]) return;
 
   const info = itemMeshes[ik];
+  if (info.type === 'chest') return; // Chests handled separately
   const itype = info.type;
   let msg = '';
 
@@ -1341,8 +1588,34 @@ function updateHUD() {
   document.getElementById('steps-val').textContent = state.steps;
   document.getElementById('kills-val').textContent = state.monstersKilled;
   // Score: rewards efficiency (low steps, high kills+stats+hp)
-  const score = state.monstersKilled * 150 + state.gold * 12 + state.atk * 8 + state.def * 8 + state.hp - state.steps * 5;
-  document.getElementById('score-val').textContent = Math.max(0, score);
+  const s = getStats();
+  const score = state.monstersKilled * 150 + state.gold * 12 + s.atk * 8 + s.def * 8 + state.hp - state.steps * 5;
+    document.getElementById('score-val').textContent = Math.max(0, score);
+  
+  // Equipment display
+  const s = getStats();
+  document.getElementById('atk-val').textContent = s.atk;
+  document.getElementById('def-val').textContent = s.def;
+  
+  // Equipment slots
+  for (const slot of ['weapon','shield','armor']) {
+    const el = document.getElementById('eq-' + slot);
+    if (el) {
+      const eq = state[slot];
+      el.innerHTML = eq ? `${eq.icon} ${eq.name}` : '<span style="color:#585b70">空</span>';
+      el.style.color = eq ? 'var(--accent)' : '#585b70';
+      el.style.cursor = eq ? 'pointer' : 'default';
+    }
+  }
+  
+  // Equipment inventory
+  const eqInv = document.getElementById('equip-inv');
+  if (eqInv) {
+    eqInv.innerHTML = state.equipInv.map((id, i) => {
+      const eq = EQUIPMENT[id];
+      return `<span class="eq-item" data-eq-id="${id}" data-eq-idx="${i}" title="${eq.desc}\nATK+${eq.atk||0} SPD${eq.atkSpeed||0} CRIT${((eq.critRate||0)*100).toFixed(0)}% DEF+${eq.def||0}">${eq.icon}</span>`;
+    }).join('');
+  }
 
   // Inventory icons
   const invGrid = document.getElementById('inventory-grid');
@@ -1553,7 +1826,7 @@ renderer.domElement.addEventListener('pointerup', () => { setTimeout(() => { con
 
 function resetCamera() {
   controls.target.set(SIZE/2, 0, SIZE/2);
-  camera.position.set(8, 9, 14);
+  camera.position.set(8, 7, 14);
   camera.lookAt(SIZE/2, 0, SIZE/2);
   controls.update();
 }
@@ -1596,6 +1869,14 @@ function animate() {
     }
   }
 
+  // Float chests
+  for (const entry of Object.values(itemMeshes)) {
+    const ud = entry.mesh.userData;
+    if (ud && ud.isChest) {
+      entry.mesh.position.y = Math.sin(time * 1.5 + ud.floatOffset) * 0.05;
+    }
+  }
+
   // Float items (groups, float the whole group)
   for (const entry of Object.values(itemMeshes)) {
     const ud = entry.mesh.userData;
@@ -1623,8 +1904,154 @@ function animate() {
   }
 
   updatePlayerLight();
+  updateMonsterLabels();
   renderer.render(scene, camera);
 }
+
+
+// ============================================================
+// CHEST & EQUIPMENT INTERACTION
+// ============================================================
+
+let openedChests = new Set();
+
+function openChestIfPresent(x, y) {
+  for (const c of CHESTS) {
+    if (c[0] === state.floor && c[1] === x && c[2] === y) {
+      const ck = `${c[0]},${c[1]},${c[2]}`;
+      if (openedChests.has(ck)) return;
+      openedChests.add(ck);
+      const eq = EQUIPMENT[c[3]];
+      state.equipInv.push(c[3]);
+      
+      // Remove chest from scene
+      const mesh = itemMeshes[key(x, y)];
+      if (mesh) {
+        const animId = setInterval(() => {
+          if (mesh.mesh.scale.x <= 0) { clearInterval(animId); dynGroup.remove(mesh.mesh); delete itemMeshes[key(x, y)]; }
+          mesh.mesh.scale.setScalar(Math.max(0, mesh.mesh.scale.x - 0.1));
+        }, 20);
+      }
+      
+      const msgEl = document.getElementById('chest-message');
+      msgEl.innerHTML = `<div style="font-size:24px">🎁</div>
+        <div style="font-weight:700;color:var(--accent);margin:6px 0">${eq.name}</div>
+        <div style="font-size:12px;color:#9399b2">${eq.desc}</div>
+        <div style="font-size:11px;color:#9399b2;margin-top:2px">${formatEqStats(eq)}</div>
+        <button onclick="document.getElementById('chest-message').classList.remove('active')" style="margin-top:8px;padding:4px 16px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer;font-family:inherit">确定</button>`;
+      msgEl.classList.add('active');
+      
+      updateHUD();
+      showMessage(`🎁 获得装备: ${eq.name}`, false);
+      return;
+    }
+  }
+}
+
+function formatEqStats(eq) {
+  const parts = [];
+  if (eq.atk) parts.push(`ATK+${eq.atk}`);
+  if (eq.def) parts.push(`DEF+${eq.def}`);
+  if (eq.atkSpeed) parts.push(`攻速${eq.atkSpeed>0?'+':''}${(eq.atkSpeed*100).toFixed(0)}%`);
+  if (eq.critRate) parts.push(`暴击${eq.critRate>0?'+':''}${(eq.critRate*100).toFixed(0)}%`);
+  if (eq.critDmg) parts.push(`暴伤${eq.critDmg>0?'+':''}${(eq.critDmg*100).toFixed(0)}%`);
+  if (eq.missChance) parts.push(`失手${eq.missChance>0?'+':''}${(eq.missChance*100).toFixed(0)}%`);
+  if (eq.stunChance) parts.push(`眩晕${(eq.stunChance*100).toFixed(0)}%`);
+  if (eq.enemyMissChance) parts.push(`敌失手${(eq.enemyMissChance*100).toFixed(0)}%`);
+  return parts.join(' · ');
+}
+
+window.clickEquipSlot = function(slot) {
+  const current = state[slot];
+  if (current) {
+    // Unequip
+    state.equipInv.push(null); // placeholder - find the id
+    // Actually store the id
+    for (const [id, eq] of Object.entries(EQUIPMENT)) {
+      if (eq.name === current.name) {
+        state.equipInv.push(id);
+        break;
+      }
+    }
+    state[slot] = null;
+    updateHUD();
+    showMessage(`卸下 ${current.name}`, false);
+  } else {
+    // Show inventory to equip
+    if (state.equipInv.length === 0) {
+      showMessage('背包中没有装备', true);
+      return;
+    }
+    // Equip first available item for this slot
+    for (let i = 0; i < state.equipInv.length; i++) {
+      const id = state.equipInv[i];
+      const eq = EQUIPMENT[id];
+      if (eq && eq.slot === slot) {
+        // Check hands constraint
+        const handsUsed = (state.weapon ? (state.weapon.hands || 1) : 0) + (state.shield ? (state.shield.hands || 0) : 0);
+        const newHands = eq.hands || 0;
+        // If equipping weapon with 2 hands, unequip shield
+        if (slot === 'weapon' && newHands === 2 && state.shield) {
+          for (const [sid, se] of Object.entries(EQUIPMENT)) {
+            if (se.name === state.shield.name) { state.equipInv.push(sid); break; }
+          }
+          state.shield = null;
+        }
+        // If equipping shield and weapon is 2-handed, unequip weapon
+        if (slot === 'shield' && state.weapon && (state.weapon.hands || 1) === 2) {
+          for (const [wid, we] of Object.entries(EQUIPMENT)) {
+            if (we.name === state.weapon.name) { state.equipInv.push(wid); break; }
+          }
+          state.weapon = null;
+        }
+        state[slot] = eq;
+        state.equipInv.splice(i, 1);
+        updateHUD();
+        showMessage(`装备 ${eq.icon} ${eq.name}`, false);
+        return;
+      }
+    }
+    showMessage('没有可装备的物品', true);
+  }
+};
+
+// Click on equipment inventory to equip
+document.addEventListener('click', (e) => {
+  const eqItem = e.target.closest('.eq-item');
+  if (!eqItem) return;
+  const id = eqItem.dataset.eqId;
+  const idx = parseInt(eqItem.dataset.eqIdx);
+  const eq = EQUIPMENT[id];
+  if (!eq) return;
+  
+  const slot = eq.slot;
+  // If slot occupied, unequip current first
+  if (state[slot]) {
+    for (const [oid, oe] of Object.entries(EQUIPMENT)) {
+      if (oe.name === state[slot].name) { state.equipInv.push(oid); break; }
+    }
+  }
+  
+  // Hands constraint
+  if (slot === 'weapon' && (eq.hands || 1) === 2 && state.shield) {
+    for (const [sid, se] of Object.entries(EQUIPMENT)) {
+      if (se.name === state.shield.name) { state.equipInv.push(sid); break; }
+    }
+    state.shield = null;
+  }
+  if (slot === 'shield' && state.weapon && (state.weapon.hands || 1) === 2) {
+    for (const [wid, we] of Object.entries(EQUIPMENT)) {
+      if (we.name === state.weapon.name) { state.equipInv.push(wid); break; }
+    }
+    state.weapon = null;
+  }
+  
+  state[slot] = eq;
+  state.equipInv.splice(idx, 1);
+  updateHUD();
+  showMessage(`装备 ${eq.icon} ${eq.name}`, false);
+});
+
 
 // ============================================================
 // INIT
@@ -1663,7 +2090,11 @@ document.addEventListener('keydown', (e) => {
     state.px = FLOOR_0_START[0];
     state.py = FLOOR_0_START[1];
     state.hp = 400; state.maxHp = 400;
-    state.atk = 10; state.def = 10;
+    state.baseAtk = 10; state.atkSpeed = 1.0; state.critRate = 0.05; state.critDmg = 1.5;
+    state.baseDef = 10; state.missChance = 0.05; state.stunChance = 0.03;
+    state.enemyMissChance = 0;
+    state.weapon = null; state.shield = null; state.armor = null;
+    state.equipInv = [];
     state.gold = 0;
     state.yellowKeys = 1; state.blueKeys = 0; state.redKeys = 0;
     state.steps = 0; state.monstersKilled = 0;
@@ -1683,6 +2114,7 @@ setInterval(() => {
 
 console.log('🏰 3D魔塔已就绪 | 方向键/WASD移动 | 鼠标拖拽旋转 | 滚轮缩放');
 console.log(`当前: 第${state.floor+1}层 | HP:${state.hp} ATK:${state.atk} DEF:${state.def}`);
+
 </script>
 </body>
 </html>
