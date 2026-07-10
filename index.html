@@ -159,15 +159,7 @@
   #seed-panel .seed-val { color: var(--accent); font-family: monospace; font-size: 12px; font-weight: 600; }
   #seed-panel .seed-hint { color: #585b70; font-size: 10px; }
 
-  #quick-battle-bar {
-    position: fixed; bottom: 44px; left: 185px;
-    background: var(--panel-bg);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 4px 10px;
-    z-index: 10;
-    pointer-events: auto;
-  }
+  
   #quick-battle-bar {
     position: fixed; bottom: 158px; right: 16px;
     background: var(--panel-bg);
@@ -224,11 +216,7 @@
     <div class="eq-slot" id="eq-armor" onclick="clickEquipSlot('armor')"><span class="slot-label">护甲</span><span style="color:#585b70">空</span></div>
   </div>
   <div class="hud-section">
-    <div class="section-title">🎒 装备包</div>
-    <div class="equip-inv" id="equip-inv"></div>
-  </div>
-  <div class="hud-section">
-    <div class="section-title">📦 道具</div>
+    <div class="section-title">📦 物品栏 (双击装备)</div>
     <div class="inventory-grid" id="inventory-grid"></div>
   </div>
   <div class="hud-section history">
@@ -1290,6 +1278,25 @@ function updateMonsterLabels() {
   }
 }
 
+
+function canWalk(x, y) {
+  const map = MAPS[state.floor];
+  if (x < 0 || x >= SIZE || y < 0 || y >= SIZE) return false;
+  const tile = map[y][x];
+  if (tile === TILE.WALL && !isHiddenWall(state.floor, x, y)) return false;
+  if (tile === TILE.WALL && isHiddenWall(state.floor, x, y)) return true;
+  if (tile === TILE.YELLOW_DOOR && state.yellowKeys > 0) return 'yellow_door';
+  if (tile === TILE.BLUE_DOOR && state.blueKeys > 0) return 'blue_door';
+  if (tile === TILE.RED_DOOR && state.redKeys > 0) return 'red_door';
+  if (tile === TILE.YELLOW_DOOR || tile === TILE.BLUE_DOOR || tile === TILE.RED_DOOR) return 'locked';
+  if (monsterMeshes[key(x, y)]) return 'monster';
+  if (tile === TILE.STAIR_UP || tile === TILE.STAIR_DOWN) return 'stairs';
+  for (const c of CHESTS) {
+    if (c[0] === state.floor && c[1] === x && c[2] === y && !openedChests.has(`${c[0]},${c[1]},${c[2]}`)) return 'chest';
+  }
+  return true;
+}
+
 function moveTo(nx, ny) {
   if (isMoving) return;
   const walkResult = canWalk(nx, ny);
@@ -1525,18 +1532,16 @@ function updateHUD() {
     }
   }
   
-  // Equipment inventory
-  const eqInv = document.getElementById('equip-inv');
-  if (eqInv) {
-    eqInv.innerHTML = state.equipInv.map((id, i) => {
-      const eq = EQUIPMENT[id];
-      return `<span class="eq-item" data-eq-id="${id}" data-eq-idx="${i}" title="${eq.desc}\nATK+${eq.atk||0} SPD${eq.atkSpeed||0} CRIT${((eq.critRate||0)*100).toFixed(0)}% DEF+${eq.def||0}">${eq.icon}</span>`;
-    }).join('');
-  }
+// Equipment shown in unified inventory above
 
-  // Inventory icons
+  // Combined inventory: items + equipment
   const invGrid = document.getElementById('inventory-grid');
-  invGrid.innerHTML = inventory.slice(-12).map(i => `<span class="inv-item" title="${i.name}">${i.icon}</span>`).join('');
+  const itemIcons = inventory.slice(-8).map(i => `<span class="inv-item" title="${i.name}">${i.icon}</span>`);
+  const eqIcons = state.equipInv.map((id, idx) => {
+    const eq = EQUIPMENT[id];
+    return `<span class="inv-item eq-inv-item" data-eq-id="${id}" data-eq-idx="${idx}" title="${eq.desc}&#10;双击装备" style="cursor:pointer">${eq.icon}</span>`;
+  });
+  invGrid.innerHTML = [...itemIcons, ...eqIcons].join('');
 
   // History log
   const histList = document.getElementById('history-list');
@@ -1932,9 +1937,9 @@ window.clickEquipSlot = function(slot) {
   }
 };
 
-// Click on equipment inventory to equip
-document.addEventListener('click', (e) => {
-  const eqItem = e.target.closest('.eq-item');
+// Double-click on equipment in inventory to equip
+document.addEventListener('dblclick', (e) => {
+  const eqItem = e.target.closest('.eq-inv-item');
   if (!eqItem) return;
   const id = eqItem.dataset.eqId;
   const idx = parseInt(eqItem.dataset.eqIdx);
@@ -1942,14 +1947,12 @@ document.addEventListener('click', (e) => {
   if (!eq) return;
   
   const slot = eq.slot;
-  // If slot occupied, unequip current first
   if (state[slot]) {
     for (const [oid, oe] of Object.entries(EQUIPMENT)) {
       if (oe.name === state[slot].name) { state.equipInv.push(oid); break; }
     }
   }
   
-  // Hands constraint
   if (slot === 'weapon' && (eq.hands || 1) === 2 && state.shield) {
     for (const [sid, se] of Object.entries(EQUIPMENT)) {
       if (se.name === state.shield.name) { state.equipInv.push(sid); break; }
@@ -1969,6 +1972,196 @@ document.addEventListener('click', (e) => {
   showMessage(`装备 ${eq.icon} ${eq.name}`, false);
 });
 
+// Click on equipped slot to unequip
+document.addEventListener('click', (e) => {
+  const eqSlot = e.target.closest('.eq-slot');
+  if (!eqSlot) return;
+  const slot = eqSlot.id.replace('eq-', '');
+  const current = state[slot];
+  if (!current) return;
+  for (const [oid, oe] of Object.entries(EQUIPMENT)) {
+    if (oe.name === current.name) { state.equipInv.push(oid); break; }
+  }
+  state[slot] = null;
+  updateHUD();
+  showMessage(`卸下 ${current.name}`, false);
+});
+
+
+
+// ============================================================
+// RANDOM MAP GENERATOR
+// ============================================================
+
+function hashStr(s) {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return h >>> 0;
+}
+
+function createRNG(seed) {
+  let s = hashStr(String(seed));
+  return function() {
+    s |= 0; s = s + 0x6D2B79F5 | 0;
+    let t = Math.imul(s ^ s >>> 15, 1 | s);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+function generateFloor(rng, floorNum) {
+  const map = Array.from({length:SIZE}, () => Array(SIZE).fill(0));
+  for (let i = 0; i < SIZE; i++) {
+    map[0][i] = map[SIZE-1][i] = map[i][0] = map[i][SIZE-1] = 1;
+  }
+  const density = 0.18 + floorNum * 0.06;
+  for (let y = 1; y < SIZE-1; y++)
+    for (let x = 1; x < SIZE-1; x++)
+      if (rng() < density) map[y][x] = 1;
+
+  // Place stair positions
+  let sx = 9, sy = 9;
+  const floorTiles = [];
+  for (let y = 1; y < SIZE-1; y++)
+    for (let x = 1; x < SIZE-1; x++)
+      if (map[y][x] === 0 && !(x===5&&y===9)) floorTiles.push([x,y]);
+  if (floorTiles.length > 0) {
+    const idx = Math.floor(rng() * floorTiles.length);
+    [sx, sy] = floorTiles[idx];
+    map[sy][sx] = 9;
+  }
+
+  ensurePath(map, 5, 9, sx, sy, rng);
+  placeDoors(map, rng, floorNum);
+
+  // Place down stair on floors 1-4
+  if (floorNum >= 1 && floorNum <= 3) {
+    const dsTiles = [];
+    for (let y = 1; y < SIZE-1; y++)
+      for (let x = 1; x < SIZE-1; x++)
+        if (map[y][x] === 0 && !(x===sx&&y===sy)) dsTiles.push([x,y]);
+    if (dsTiles.length > 0) {
+      const [dx, dy] = dsTiles[Math.floor(rng() * dsTiles.length)];
+      map[dy][dx] = 8;
+    }
+  }
+  if (floorNum === 4) {
+    const dt = [];
+    for (let y = 1; y < SIZE-1; y++)
+      for (let x = 1; x < SIZE-1; x++)
+        if (map[y][x] === 0) dt.push([x,y]);
+    if (dt.length > 0) { const [dx,dy] = dt[Math.floor(rng()*dt.length)]; map[dy][dx] = 8; }
+  }
+
+  // Gather walkable tiles for monsters/items
+  const walkable = [];
+  for (let y = 1; y < SIZE-1; y++)
+    for (let x = 1; x < SIZE-1; x++)
+      if (map[y][x] === 0) walkable.push([x,y]);
+
+  const pool = walkable.filter(([x,y]) => !(x===5&&y===9) && !(x===sx&&y===sy));
+  
+  const monsterCount = 3 + floorNum * 2;
+  const monsters = [];
+  const mTypes = floorNum === 4 ? [4,5,6,7] : floorNum >= 2 ? [2,3,4,5] : floorNum >= 1 ? [1,2,3,4] : [1,2];
+  for (let i = 0; i < monsterCount && pool.length > 0; i++) {
+    const idx = Math.floor(rng() * pool.length);
+    const [mx, my] = pool.splice(idx, 1)[0];
+    monsters.push([mTypes[Math.floor(rng()*mTypes.length)], mx, my]);
+  }
+
+  const itemDefs = [
+    ['rg','rp','yk','yk','bk'],
+    ['bg','rg','rp','bp','yk','yk','yk','bk'],
+    ['rg','rg','bg','bg','rp','rp','bp','yk','yk','yk','bk','rk'],
+    ['rg','rg','bg','bg','rp','rp','bp','bp','yk','yk','yk','yk','bk','bk','rk'],
+    ['rg','rg','rg','bg','bg','bg','rp','rp','rp','bp','bp','yk','yk','yk','bk','rk'],
+  ];
+  const items = [];
+  const defs = itemDefs[Math.min(floorNum, 4)];
+  for (let i = 0; i < defs.length && pool.length > 0; i++) {
+    const idx = Math.floor(rng() * pool.length);
+    const [ix, iy] = pool.splice(idx, 1)[0];
+    items.push([defs[i], ix, iy]);
+  }
+
+  const hiddenWalls = [];
+  if (rng() < 0.6) {
+    const wallTiles = [];
+    for (let y = 2; y < SIZE-2; y++)
+      for (let x = 2; x < SIZE-2; x++)
+        if (map[y][x] === 1) wallTiles.push([x,y]);
+    if (wallTiles.length > 0) {
+      const [wx, wy] = wallTiles[Math.floor(rng() * wallTiles.length)];
+      hiddenWalls.push([floorNum, wx, wy]);
+    }
+  }
+
+  return { map, monsters, items, hiddenWalls };
+}
+
+function ensurePath(map, sx, sy, ex, ey, rng) {
+  const visited = Array.from({length:SIZE}, () => Array(SIZE).fill(false));
+  const queue = [[sx, sy]]; visited[sy][sx] = true;
+  while (queue.length > 0) {
+    const [cx, cy] = queue.shift();
+    for (const [dx, dy] of [[0,-1],[0,1],[-1,0],[1,0]]) {
+      const nx = cx+dx, ny = cy+dy;
+      if (nx<0||nx>=SIZE||ny<0||ny>=SIZE||visited[ny][nx]) continue;
+      if (map[ny][nx] === 1) continue;
+      visited[ny][nx] = true; queue.push([nx, ny]);
+    }
+  }
+  if (!visited[ey][ex]) {
+    let cx = sx, cy = sy;
+    for (let step = 0; step < 100 && !(cx===ex&&cy===ey); step++) {
+      const dx = Math.sign(ex-cx), dy = Math.sign(ey-cy);
+      let moved = false;
+      for (const [ddx,ddy] of [[dx,0],[0,dy],[dx,dy]]) {
+        const nx=cx+ddx, ny=cy+ddy;
+        if (nx>=1&&nx<SIZE-1&&ny>=1&&ny<SIZE-1) {
+          if (map[ny][nx]===1) { map[ny][nx]=0; moved=true; cx=nx; cy=ny; break; }
+          if (ddx||ddy) { cx=nx; cy=ny; moved=true; break; }
+        }
+      }
+      if (!moved) break;
+    }
+  }
+}
+
+function placeDoors(map, rng, floorNum) {
+  const numDoors = 1 + Math.floor(rng() * 2);
+  for (let i = 0; i < numDoors; i++) {
+    const candidates = [];
+    for (let y = 2; y < SIZE-2; y++) {
+      for (let x = 2; x < SIZE-2; x++) {
+        if (map[y][x] !== 0) continue;
+        const nWall = map[y-1][x]===1, sWall = map[y+1][x]===1;
+        const eWall = map[y][x+1]===1, wWall = map[y][x-1]===1;
+        // Door makes sense only if walls on 2 sides constrict passage to 1-tile
+        if ((nWall&&sWall&&!eWall&&!wWall) || (eWall&&wWall&&!nWall&&!sWall))
+          candidates.push([x,y]);
+      }
+    }
+    if (candidates.length === 0) break;
+    const [dx, dy] = candidates[Math.floor(rng() * candidates.length)];
+    const doorType = floorNum >= 3 ? (rng()<0.4?4:rng()<0.5?3:2) : floorNum >= 1 ? (rng()<0.5?3:2) : 2;
+    map[dy][dx] = doorType;
+    // Remove that position from candidates to avoid overlapping doors
+    candidates.splice(candidates.findIndex(([x,y])=>x===dx&&y===dy), 1);
+  }
+}
+
+function generateAllMaps(seed) {
+  const rng = createRNG(seed);
+  const maps=[], monsters=[], items=[], allHidden=[];
+  for (let f = 0; f < 5; f++) {
+    const floor = generateFloor(rng, f);
+    maps.push(floor.map); monsters.push(floor.monsters);
+    items.push(floor.items); allHidden.push(...floor.hiddenWalls);
+  }
+  return { maps, monsters, items, hiddenWalls: allHidden };
+}
 
 // ============================================================
 // INIT
@@ -1986,6 +2179,8 @@ function regenerateMaps(seed) {
   MONSTERS = gen.monsters;
   ITEMS = gen.items;
   HIDDEN_WALLS = gen.hiddenWalls;
+  // Clear chest data for random maps (no preset chests)
+  CHESTS.length = 0;
   document.getElementById('seed-display').textContent = seed;
 }
 
