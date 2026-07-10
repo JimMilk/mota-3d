@@ -190,6 +190,15 @@
     <div class="key"><span class="key-dot blue"></span> <span id="bk-val">0</span></div>
     <div class="key"><span class="key-dot red"></span> <span id="rk-val">0</span></div>
   </div>
+  <div class="stat" style="margin-top:4px;padding-top:4px;border-top:1px solid var(--border);">
+    <span class="label">👟 步数</span><span class="val" id="steps-val" style="color:#a6adc8;">0</span>
+  </div>
+  <div class="stat">
+    <span class="label">💀 击杀</span><span class="val" id="kills-val" style="color:#a6adc8;">0</span>
+  </div>
+  <div class="stat">
+    <span class="label">⭐ 积分</span><span class="val" id="score-val" style="color:var(--accent);">0</span>
+  </div>
   <div class="hud-section">
     <div class="section-title">📦 背包</div>
     <div class="inventory-grid" id="inventory-grid"></div>
@@ -249,7 +258,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 // GAME DATA
 // ============================================================
 
-const TILE = { FLOOR:0, WALL:1, YELLOW_DOOR:2, BLUE_DOOR:3, RED_DOOR:4, STAIR_UP:9 };
+const TILE = { FLOOR:0, WALL:1, YELLOW_DOOR:2, BLUE_DOOR:3, RED_DOOR:4, STAIR_DOWN:8, STAIR_UP:9 };
 const SIZE = 11; // 11x11 grid
 
 // Monster definitions: [name, hp, atk, def, gold, color]
@@ -269,7 +278,7 @@ const ITEM = {
   YELLOW_KEY: 'yk', BLUE_KEY: 'bk', RED_KEY: 'rk',
 };
 
-// 5 floor maps (11x11). 0=floor,1=wall,2=yellow door,3=blue door,4=red door,9=stair up
+// 5 floor maps (11x11). 0=floor,1=wall,2=yellow door,3=blue door,4=red door,8=stair down,9=stair up
 let MAPS = [
   // Floor 0 (1F)
   [
@@ -289,7 +298,7 @@ let MAPS = [
   // Floor 1 (2F)
   [
     [1,1,1,1,1,1,1,1,1,1,1],
-    [1,0,0,0,3,0,0,0,3,0,1],
+    [1,8,0,0,3,0,0,0,3,0,1],
     [1,0,1,0,0,0,0,0,0,0,1],
     [1,2,0,0,1,0,0,1,0,0,1],
     [1,0,0,0,1,0,0,0,0,0,1],
@@ -304,7 +313,7 @@ let MAPS = [
   // Floor 2 (3F)
   [
     [1,1,1,1,1,1,1,1,1,1,1],
-    [1,0,0,0,3,0,0,0,0,0,1],
+    [1,8,0,0,3,0,0,0,0,0,1],
     [1,0,1,1,1,1,1,0,1,0,1],
     [1,0,1,0,0,0,0,0,1,0,1],
     [1,0,0,0,1,0,1,2,0,0,1],
@@ -319,7 +328,7 @@ let MAPS = [
   // Floor 3 (4F)
   [
     [1,1,1,1,1,1,1,1,1,1,1],
-    [1,0,0,0,0,1,1,0,0,0,1],
+    [1,8,0,0,0,1,1,0,0,0,1],
     [1,0,1,1,0,0,0,0,1,0,1],
     [1,0,1,0,0,1,0,0,1,0,1],
     [1,1,1,0,1,0,4,0,0,0,1],
@@ -334,7 +343,7 @@ let MAPS = [
   // Floor 4 (5F)
   [
     [1,1,1,1,1,1,1,1,1,1,1],
-    [1,0,0,0,0,0,0,0,0,0,1],
+    [1,8,0,0,0,0,0,0,0,0,1],
     [1,0,1,1,1,0,1,1,1,0,1],
     [1,0,1,0,0,0,0,0,1,0,1],
     [1,0,1,0,1,1,1,0,1,0,1],
@@ -350,7 +359,7 @@ let MAPS = [
 // Monsters per floor: [monsterType, x, y]
 let MONSTERS = [
   [[1,3,3],[1,7,5],[1,8,8],[2,4,8],[2,8,5],[1,1,8]],
-  [[2,7,8],[2,1,4],[3,4,5],[3,4,2],[1,6,4],[1,3,5],[4,1,6]],
+  [[2,1,5],[2,4,8],[3,5,9],[3,6,4],[1,2,7],[1,5,8],[4,5,6]],
   [[3,4,8],[3,8,4],[4,8,1],[4,7,1],[5,8,7],[5,3,6],[2,5,1]],
   [[4,1,2],[4,3,7],[5,4,2],[5,9,8],[6,4,7],[6,5,2],[6,5,4],[3,3,3]],
   [[6,9,4],[6,4,1],[6,7,9],[5,3,3],[5,4,7],[5,6,5],[4,5,2],[7,1,7]]
@@ -359,200 +368,11 @@ let MONSTERS = [
 // Items per floor: [itemType, x, y]
 let ITEMS = [
   [['rg',3,4],['rp',7,4],['yk',9,1],['yk',1,4],['bk',5,7]],
-  [['bg',3,1],['rg',9,2],['rp',7,2],['bp',4,6],['yk',3,2],['yk',9,6],['yk',2,4],['bk',9,4]],
+  [['bg',5,1],['rg',2,3],['rp',8,2],['bp',5,4],['yk',4,2],['yk',7,8],['yk',1,6],['bk',8,4]],
   [['rg',7,6],['rg',5,6],['rg',5,4],['bg',1,7],['bg',5,8],['bg',3,3],['rp',9,2],['rp',1,3],['rp',3,4],['bp',2,4],['bp',3,5],['yk',3,7],['yk',3,8],['yk',9,3],['bk',2,7],['bk',6,6],['rk',7,7]],
   [['rg',3,9],['rg',1,3],['rg',7,1],['rg',5,5],['bg',9,4],['bg',9,5],['bg',1,8],['rp',8,4],['rp',1,5],['rp',3,1],['bp',3,4],['bp',8,9],['yk',5,9],['yk',6,8],['yk',7,2],['yk',1,9],['bk',1,7],['bk',7,6],['rk',4,3]],
   [['rg',8,5],['rg',7,5],['rg',8,9],['bg',1,4],['bg',5,7],['bg',9,3],['rp',5,9],['rp',7,3],['rp',3,7],['bp',2,1],['bp',5,6],['yk',9,6],['yk',7,4],['yk',6,1],['bk',9,8],['rk',5,3]]
 ];
-
-
-// ============================================================
-// RANDOM MAP GENERATOR
-// ============================================================
-
-function hashStr(s) {
-  let h = 5381;
-  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
-  return h >>> 0;
-}
-
-function createRNG(seed) {
-  let s = hashStr(String(seed));
-  return function() {
-    s |= 0; s = s + 0x6D2B79F5 | 0;
-    let t = Math.imul(s ^ s >>> 15, 1 | s);
-    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-    return ((t ^ t >>> 14) >>> 0) / 4294967296;
-  };
-}
-
-function generateFloor(rng, floorNum) {
-  // Create map: border walls + interior
-  const map = Array.from({length:SIZE}, () => Array(SIZE).fill(0));
-  for (let i = 0; i < SIZE; i++) {
-    map[0][i] = map[SIZE-1][i] = map[i][0] = map[i][SIZE-1] = 1;
-  }
-
-  // Interior wall density increases per floor
-  const density = 0.18 + floorNum * 0.06;
-  for (let y = 1; y < SIZE-1; y++) {
-    for (let x = 1; x < SIZE-1; x++) {
-      if (rng() < density) map[y][x] = 1;
-    }
-  }
-
-  // Pick stair position (must be floor, away from start)
-  const floorTiles = [];
-  for (let y = 1; y < SIZE-1; y++)
-    for (let x = 1; x < SIZE-1; x++)
-      if (map[y][x] === 0 && (Math.abs(x-1)+Math.abs(y-1) > 4))
-        floorTiles.push([x,y]);
-
-  const stairIdx = Math.floor(rng() * floorTiles.length);
-  const [sx, sy] = floorTiles[stairIdx];
-  map[sy][sx] = 9;
-
-  // BFS to ensure path from (1,1) to stair exists
-  ensurePath(map, 1, 1, sx, sy, rng);
-
-  // Place doors (1-2 per floor) at chokepoints
-  const doors = placeDoors(map, rng, floorNum);
-
-  // Gather all walkable tiles
-  const walkable = [];
-  for (let y = 1; y < SIZE-1; y++)
-    for (let x = 1; x < SIZE-1; x++)
-      if (map[y][x] === 0) walkable.push([x,y]);
-
-  // Remove start and stair from placement pool
-  const pool = walkable.filter(([x,y]) => !(x===1&&y===1) && !(x===sx&&y===sy));
-
-  // Place monsters (fewer on floor 0, more on higher floors)
-  const monsterCount = 3 + floorNum * 2;
-  const monsters = [];
-  const usedPositions = new Set();
-  const mTypes = floorNum === 4 ? [4,5,6,7] : floorNum >= 2 ? [2,3,4,5] : floorNum >= 1 ? [1,2,3,4] : [1,2];
-  for (let i = 0; i < monsterCount && pool.length > 0; i++) {
-    const idx = Math.floor(rng() * pool.length);
-    const [mx, my] = pool.splice(idx, 1)[0];
-    const mType = mTypes[Math.floor(rng() * mTypes.length)];
-    monsters.push([mType, mx, my]);
-  }
-
-  // Place items on remaining tiles
-  const itemDefs = [
-    ['rg','bg','rp','bp','yk','yk','yk','bk'],
-    ['rg','bg','rp','bp','yk','yk','yk','bk'],
-    ['rg','rg','bg','bg','rp','rp','bp','yk','yk','yk','bk','rk'],
-    ['rg','rg','bg','bg','rp','rp','bp','bp','yk','yk','yk','yk','bk','bk','rk'],
-    ['rg','rg','rg','bg','bg','bg','rp','rp','rp','bp','bp','yk','yk','yk','bk','rk'],
-  ];
-  const items = [];
-  const defs = itemDefs[Math.min(floorNum, 4)];
-  for (let i = 0; i < defs.length && pool.length > 0; i++) {
-    const idx = Math.floor(rng() * pool.length);
-    const [ix, iy] = pool.splice(idx, 1)[0];
-    items.push([defs[i], ix, iy]);
-  }
-
-  // Hidden walls (1-2 per floor)
-  const hiddenWalls = [];
-  if (floorNum >= 1 && rng() < 0.7) {
-    const wallTiles = [];
-    for (let y = 2; y < SIZE-2; y++)
-      for (let x = 2; x < SIZE-2; x++)
-        if (map[y][x] === 1) wallTiles.push([x,y]);
-    if (wallTiles.length > 0) {
-      const idx = Math.floor(rng() * wallTiles.length);
-      hiddenWalls.push([floorNum, wallTiles[idx][0], wallTiles[idx][1]]);
-    }
-  }
-
-  return { map, monsters, items, hiddenWalls };
-}
-
-function ensurePath(map, sx, sy, ex, ey, rng) {
-  // BFS from start - if stair unreachable, punch holes through walls
-  const visited = Array.from({length:SIZE}, () => Array(SIZE).fill(false));
-  const queue = [[sx, sy]];
-  visited[sy][sx] = true;
-  const dirs = [[0,-1],[0,1],[-1,0],[1,0]];
-
-  while (queue.length > 0) {
-    const [cx, cy] = queue.shift();
-    for (const [dx, dy] of dirs) {
-      const nx = cx + dx, ny = cy + dy;
-      if (nx < 0 || nx >= SIZE || ny < 0 || ny >= SIZE) continue;
-      if (visited[ny][nx]) continue;
-      if (map[ny][nx] === 1) continue;
-      visited[ny][nx] = true;
-      queue.push([nx, ny]);
-    }
-  }
-
-  // If stair not reachable, greedily punch through walls towards it
-  if (!visited[ey][ex]) {
-    let cx = sx, cy = sy;
-    const maxSteps = 100;
-    for (let step = 0; step < maxSteps && !(cx===ex&&cy===ey); step++) {
-      // Move towards target
-      const dx = Math.sign(ex - cx);
-      const dy = Math.sign(ey - cy);
-      let moved = false;
-      for (const [ddx, ddy] of [[dx,0],[0,dy],[dx,dy]]) {
-        const nx = cx + ddx, ny = cy + ddy;
-        if (nx >= 1 && nx < SIZE-1 && ny >= 1 && ny < SIZE-1) {
-          if (map[ny][nx] === 1) { map[ny][nx] = 0; moved = true; cx = nx; cy = ny; break; }
-          if (ddx!==0||ddy!==0) { cx = nx; cy = ny; moved = true; break; }
-        }
-      }
-      if (!moved) break;
-    }
-    // Also punch through stair position if it's wall
-    if (map[ey][ex] !== 9) map[ey][ex] = 9;
-  }
-}
-
-function placeDoors(map, rng, floorNum) {
-  const numDoors = 1 + Math.floor(rng() * 2);
-  const doors = [];
-  for (let i = 0; i < numDoors; i++) {
-    // Find floor tiles with walls on opposite sides (natural chokepoint)
-    const candidates = [];
-    for (let y = 2; y < SIZE-2; y++) {
-      for (let x = 2; x < SIZE-2; x++) {
-        if (map[y][x] !== 0) continue;
-        const nWall = y>0 && map[y-1][x]===1;
-        const sWall = y<SIZE-1 && map[y+1][x]===1;
-        const eWall = x<SIZE-1 && map[y][x+1]===1;
-        const wWall = x>0 && map[y][x-1]===1;
-        if ((nWall&&sWall) || (eWall&&wWall)) candidates.push([x,y]);
-      }
-    }
-    if (candidates.length === 0) break;
-    const idx = Math.floor(rng() * candidates.length);
-    const [dx, dy] = candidates.splice(idx, 1)[0];
-    const doorType = floorNum >= 3 ? (rng() < 0.3 ? 4 : rng() < 0.5 ? 3 : 2) :
-                     floorNum >= 1 ? (rng() < 0.5 ? 3 : 2) : 2;
-    map[dy][dx] = doorType;
-  }
-  return doors;
-}
-
-function generateAllMaps(seed) {
-  const rng = createRNG(seed);
-  const maps = [], monsters = [], items = [], allHidden = [], starts = [];
-  for (let f = 0; f < 5; f++) {
-    const floor = generateFloor(rng, f);
-    maps.push(floor.map);
-    monsters.push(floor.monsters);
-    items.push(floor.items);
-    allHidden.push(...floor.hiddenWalls);
-    starts.push(f === 1 ? [1, SIZE-2] : [1, 1]);
-  }
-  return { maps, monsters, items, hiddenWalls: allHidden, floorStart: starts };
-}
-
 // Hidden walls LOOK like walls but are passable (must align with WALL tiles in maps)
 let HIDDEN_WALLS = [
   [0, 4, 4], // 1F: secret passage through central wall
@@ -586,6 +406,8 @@ const state = {
   floor: 0,
   px: 1,
   py: 1,
+  steps: 0,
+  monstersKilled: 0,
 };
 
 // Runtime state per floor (cleared on floor change)
@@ -686,6 +508,7 @@ let doorMeshes = {}; // "x,y" -> mesh
 let monsterMeshes = {}; // "x,y" -> {mesh, type}
 let itemMeshes = {}; // "x,y" -> {mesh, type}
 let stairMesh = null;
+let stairDownMesh = null;
 let wallMeshes = {};
 
 // ============================================================
@@ -719,6 +542,7 @@ function buildFloor() {
   monsterMeshes = {};
   itemMeshes = {};
   stairMesh = null;
+  stairDownMesh = null;
   wallMeshes = {};
 
   const map = MAPS[state.floor];
@@ -804,13 +628,48 @@ function buildFloor() {
         dynGroup.add(ladderGroup);
         stairMesh = ladderGroup;
         stairMesh.glow = glow;
+      } else if (tile === TILE.STAIR_DOWN) {
+        // Trapdoor with short downward ladder
+        const downGroup = new THREE.Group();
+        const darkMat = new THREE.MeshStandardMaterial({ color:0x1a1a2a, roughness:0.9, metalness:0.1 });
+        // Dark pit ring
+        const pitGeo = new THREE.TorusGeometry(0.3, 0.08, 8, 16);
+        const pit = new THREE.Mesh(pitGeo, darkMat);
+        pit.rotation.x = -Math.PI/2;
+        pit.position.y = 0.05;
+        pit.castShadow = true;
+        downGroup.add(pit);
+        // Dark inner circle
+        const innerGeo = new THREE.CircleGeometry(0.22, 16);
+        const innerMat = new THREE.MeshStandardMaterial({ color:0x0a0a14, roughness:1, side:THREE.DoubleSide });
+        const inner = new THREE.Mesh(innerGeo, innerMat);
+        inner.rotation.x = -Math.PI/2;
+        inner.position.y = 0.06;
+        downGroup.add(inner);
+        // Short downward poles
+        const dpoleMat = new THREE.MeshStandardMaterial({ color:0x5a5a6a, roughness:0.5, metalness:0.3 });
+        for (let sx = -1; sx <= 1; sx += 2) {
+          const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.35, 6), dpoleMat);
+          pole.position.set(sx * 0.15, -0.1, 0);
+          downGroup.add(pole);
+        }
+        // Glow ring (different color from up-stair)
+        const dglowGeo = new THREE.RingGeometry(0.22, 0.35, 32);
+        const dglowMat = new THREE.MeshBasicMaterial({ color:0x4466aa, side:THREE.DoubleSide, transparent:true, opacity:0.35 });
+        const dglow = new THREE.Mesh(dglowGeo, dglowMat);
+        dglow.rotation.x = -Math.PI/2;
+        dglow.position.y = 0.07;
+        downGroup.add(dglow);
+        downGroup.position.set(pos.x, 0, pos.z);
+        dynGroup.add(downGroup);
+        stairDownMesh = downGroup;
       }
 
       // Floor tile decoration
       if (tile !== TILE.WALL) {
         const tileGeo = new THREE.PlaneGeometry(0.9, 0.9);
         const tileMat = new THREE.MeshStandardMaterial({
-          color: tile === TILE.STAIR_UP ? 0x3a3a30 : 0x2a2a38,
+          color: tile === TILE.STAIR_UP ? 0x3a3a30 : tile === TILE.STAIR_DOWN ? 0x202030 : 0x2a2a38,
           roughness: 0.8, metalness: 0.05
         });
         const tileMesh = new THREE.Mesh(tileGeo, tileMat);
@@ -1213,6 +1072,7 @@ function doBattle(mx, my) {
   // Apply damage
   state.hp -= result.loss;
   state.gold += result.monster.gold;
+  state.monstersKilled++;
 
   // Remove monster from tracking immediately (prevent double-fight)
   defeatedThisFloor.add(key(mx, my));
@@ -1233,6 +1093,13 @@ function doBattle(mx, my) {
   updateHUD();
   updateMinimap();
   showMessage(`击败了 ${info.data.name}！失去 ${result.loss} HP，获得 ${result.monster.gold} 金币`, false);
+
+  // Check boss defeat on top floor
+  if (info.type === 7 && state.floor === MAPS.length - 1) {
+    setTimeout(() => {
+      document.getElementById('victory-overlay').classList.add('active');
+    }, 600);
+  }
 
   // Check death
   if (state.hp <= 0) {
@@ -1305,6 +1172,7 @@ function moveTo(nx, ny) {
   // Move player
   state.px = nx;
   state.py = ny;
+  state.steps++;
   animateMove(nx, ny);
 
   // Pickup items
@@ -1368,11 +1236,13 @@ function checkStairs(x, y) {
   const map = MAPS[state.floor];
   if (map[y][x] === TILE.STAIR_UP) {
     if (state.floor >= MAPS.length - 1) {
-      // Victory!
       document.getElementById('victory-overlay').classList.add('active');
       return;
     }
     goToFloor(state.floor + 1);
+  } else if (map[y][x] === TILE.STAIR_DOWN) {
+    if (state.floor <= 0) return;
+    goToFloor(state.floor - 1);
   }
 }
 
@@ -1459,6 +1329,11 @@ function updateHUD() {
   document.getElementById('yk-val').textContent = state.yellowKeys;
   document.getElementById('bk-val').textContent = state.blueKeys;
   document.getElementById('rk-val').textContent = state.redKeys;
+  document.getElementById('steps-val').textContent = state.steps;
+  document.getElementById('kills-val').textContent = state.monstersKilled;
+  // Score: rewards efficiency (low steps, high kills+stats+hp)
+  const score = state.monstersKilled * 150 + state.gold * 12 + state.atk * 8 + state.def * 8 + state.hp - state.steps * 5;
+  document.getElementById('score-val').textContent = Math.max(0, score);
 
   // Inventory icons
   const invGrid = document.getElementById('inventory-grid');
@@ -1487,7 +1362,7 @@ function updateMinimap() {
         } else {
           ctx.fillStyle = '#1a1a2a';
         }
-      } else if (tile === TILE.FLOOR || tile === TILE.STAIR_UP) {
+      } else if (tile === TILE.FLOOR || tile === TILE.STAIR_UP || tile === TILE.STAIR_DOWN) {
         ctx.fillStyle = '#2a2a38';
       } else if (tile === TILE.YELLOW_DOOR) ctx.fillStyle = '#f5c842';
       else if (tile === TILE.BLUE_DOOR) ctx.fillStyle = '#89b4fa';
@@ -1500,6 +1375,11 @@ function updateMinimap() {
         ctx.font = '10px sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText('▲', x * cs + cs/2, y * cs + cs - 1);
+      } else if (tile === TILE.STAIR_DOWN) {
+        ctx.fillStyle = '#4466aa';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('▼', x * cs + cs/2, y * cs + cs - 1);
       }
     }
   }
@@ -1720,9 +1600,17 @@ function animate() {
     info.mesh.position.y = Math.sin(time * 2 + ud.floatOffset) * 0.06;
   }
 
-  // Stair glow pulse (ladder)
+  // Stair glow pulse
   if (stairMesh && stairMesh.glow) {
     stairMesh.glow.material.opacity = 0.25 + Math.sin(time * 3) * 0.15;
+  }
+  // Down stair glow
+  if (stairDownMesh) {
+    stairDownMesh.children.forEach(c => {
+      if (c.material && c.material.color && c.material.color.getHex() === 0x4466aa) {
+        c.material.opacity = 0.25 + Math.sin(time * 2.5) * 0.15;
+      }
+    });
   }
 
   updatePlayerLight();
@@ -1746,8 +1634,8 @@ function regenerateMaps(seed) {
   document.getElementById('seed-display').textContent = seed;
 }
 
-// Generate initial random maps BEFORE building scene
-regenerateMaps(currentSeed);
+// Use preset maps by default (validated, hand-crafted feel)
+// Press G to generate a random map instead
 
 buildFloor();
 updatePlayerLight();
@@ -1768,6 +1656,7 @@ document.addEventListener('keydown', (e) => {
     state.atk = 10; state.def = 10;
     state.gold = 0;
     state.yellowKeys = 1; state.blueKeys = 0; state.redKeys = 0;
+    state.steps = 0; state.monstersKilled = 0;
     defeatedThisFloor = new Set();
     inventory.length = 0; history.length = 0;
     buildFloor();
