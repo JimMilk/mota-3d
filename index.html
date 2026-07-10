@@ -281,7 +281,16 @@ window.addEventListener('error', function(e) {
   if (!el) return;
   var tag = e.target && e.target.tagName;
   el.textContent = '❌' + (tag === 'SCRIPT' || tag === 'LINK' ? tag : 'L'+e.lineno) + ':' + String(e.message||e.error||(e.target&&e.target.src)||'?').slice(0,50);
+  el.style.color = '#f88';
 }, true);
+// Timeout: if module doesn&apos;t load within 5s, show error
+setTimeout(function() {
+  var el = document.getElementById('game-status');
+  if (el && el.textContent === '加载中...') {
+    el.textContent = '⏱️ 加载超时: 检查网络/CDN';
+    el.style.color = '#faa';
+  }
+}, 5000);
 </script>
 
 <script type="module">
