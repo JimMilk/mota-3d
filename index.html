@@ -179,6 +179,9 @@
 </head>
 <body>
 
+
+<div id="game-status" style="position:fixed;top:2px;right:8px;font-size:10px;color:#0f0;z-index:1000;pointer-events:none;font-family:monospace;background:rgba(0,0,0,0.7);padding:2px 6px;border-radius:3px;">加载中...</div>
+
 <div id="hud">
   <div class="floor" id="floor-label">第 1 层</div>
   <div class="stat hp"><span class="label">❤️ 生命</span><span class="val" id="hp-val">400</span></div>
@@ -1498,6 +1501,7 @@ function showMessage(text, isWarn) {
 const keys = {};
 window.addEventListener('keydown', e => {
   keys[e.key] = true;
+  document.getElementById('game-status').textContent = '⌨️ ' + e.key;
   handleInput();
 });
 window.addEventListener('keyup', e => { keys[e.key] = false; });
@@ -1522,12 +1526,7 @@ function handleInput() {
   keys['ArrowLeft'] = keys['a'] = keys['A'] = false;
   keys['ArrowRight'] = keys['d'] = keys['D'] = false;
 
-  console.log('MOVE', 'Moving from', state.px, state.py, 'by', dx, dy);
-  try {
-    moveTo(state.px + dx, state.py + dy);
-  } catch(e) {
-    console.error('MOVE CRASH:', e.message);
-  }
+  moveTo(state.px + dx, state.py + dy);
 }
 
 // Battle panel buttons
