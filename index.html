@@ -278,6 +278,14 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
+// Global error catch for debugging
+window.onerror = (msg, src, line) => {
+  document.getElementById('game-status').textContent = '❌L'+line+':'+String(msg).slice(0,50);
+};
+window.addEventListener('unhandledrejection', (e) => {
+  document.getElementById('game-status').textContent = '❌PR:'+String(e.reason).slice(0,50);
+});
+
 // ============================================================
 // GAME DATA
 // ============================================================
@@ -1868,7 +1876,7 @@ setInterval(() => {
 console.log('🏰 3D魔塔已就绪 | 方向键/WASD移动 | 鼠标拖拽旋转 | 滚轮缩放');
 const _ss = getStats();
 console.log(`当前: 第${state.floor+1}层 | HP:${state.hp} ATK:${_ss.atk} DEF:${_ss.def}`);
-document.getElementById('game-status').textContent = '✅ 就绪';
+document.getElementById('game-status').textContent = '✅ 就緒';
 </script>
 
 </body>
