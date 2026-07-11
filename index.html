@@ -758,7 +758,7 @@ function buildFloor() {
           ladderGroup.add(pole);
         }
         // Cross rungs
-        for (let i = 0; i < 5; i++) {
+        for (let i = 0, curMHp = mHp; i < 5; i++) {
           const rung = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.38, 6), rungMat);
           rung.rotation.z = Math.PI/2;
           rung.position.set(0, 0.1 + i * 0.14, 0);
@@ -1111,7 +1111,7 @@ function createDynamicStairMesh(x, y) {
   leftPole.position.set(-0.25, pillarH/2, 0); group.add(leftPole);
   const rightPole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, pillarH, 8), mat);
   rightPole.position.set(0.25, pillarH/2, 0); group.add(rightPole);
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0, curMHp = mHp; i < 5; i++) {
     const rung = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.03, 0.06), mat);
     rung.position.set(0, 0.06 + i * 0.07, 0); group.add(rung);
   }
@@ -1269,7 +1269,7 @@ function doBattle(mx, my) {
   battleAnimating = true;
   if (quickBattle) {
     // Quick battle: skip animation, apply results immediately
-    defeatedThisFloor.add(fk(mx, my));
+    document.getElementById('monster-info').style.display='none'; defeatedThisFloor.add(fk(mx, my));
     delete monsterMeshes[key(mx, my)];
     dynGroup.remove(info.mesh);
     battleAnimating = false;
@@ -1289,10 +1289,10 @@ function doBattle(mx, my) {
       state.equipInv.push(dropId);
       showMessage(`🎁 ${m.name}掉落: ${EQUIPMENT[dropId].icon} ${EQUIPMENT[dropId].name}`, false);
     }
-    if (state.hp <= 0) showGameOver();
+    if (state.hp <= 0) { document.getElementById('monster-info').style.display='none'; showGameOver(); }
   } else {
-    gameLogEvent('battle', `vs ${m.name} HP${m.hp} ATK${m.atk} DEF${m.def} F${state.floor}`); animateBattleLog(log, info.mesh, () => {
-      defeatedThisFloor.add(fk(mx, my));
+    gameLogEvent('battle', `vs ${m.name} HP${m.hp} ATK${m.atk} DEF${m.def} F${state.floor}`); animateBattleLog(log, info.mesh, m.hp, m.name, () => {
+      document.getElementById('monster-info').style.display='none'; defeatedThisFloor.add(fk(mx, my));
       delete monsterMeshes[key(mx, my)];
       dynGroup.remove(info.mesh);
       battleAnimating = false;
@@ -1313,15 +1313,15 @@ function doBattle(mx, my) {
         state.equipInv.push(dropId);
         showMessage(`🎁 ${m.name}掉落: ${EQUIPMENT[dropId].icon} ${EQUIPMENT[dropId].name}`, false);
       }
-      if (state.hp <= 0) showGameOver();
+      if (state.hp <= 0) { document.getElementById('monster-info').style.display='none'; showGameOver(); }
     });
   }
 }
 
 let battleAnimating = false;
 
-function animateBattleLog(log, monsterMesh, onDone) {
-  let i = 0;
+function animateBattleLog(log, monsterMesh, mHp, mName, onDone) {
+  let i = 0, curMHp = mHp;
   const wp = new THREE.Vector3();
   const ival = setInterval(() => {
     if (i >= log.length || !monsterMesh.parent) { clearInterval(ival); if(onDone)onDone(); return; }
@@ -1338,18 +1338,18 @@ function animateBattleLog(log, monsterMesh, onDone) {
       if (e.type==='miss') { text='MISS'; color='#888'; }
       else if (e.type==='crit') { text='💥'+e.dmg; color='#ff0'; }
       else if (e.type==='stun') { text='⚡眩晕'; color='#8af'; }
-      else { text='-'+e.dmg; color='#fff'; }
+      else { text='-'+e.dmg; color='#fff'; curMHp = Math.max(0, curMHp - (e.dmg||0)); }
+      updateMonsterHPDisplay(curMHp, mName, mHp);
     } else {
       if (e.type==='miss') { text='闪避'; color='#8f8'; }
       else if (e.type==='crit') { text='💥'+e.dmg; color='#f44'; }
       else { text='-'+e.dmg; color='#f66'; }
-      // Real-time HP decrease per hit
       state.hp = Math.max(0, state.hp - (e.dmg||0));
-      updateHUD(); updateMonsterHPDisplay(m.curHp, m.name, m.hp);
+      updateHUD();
       if (state.hp <= 0) {
         clearInterval(ival);
+        updateMonsterHPDisplay(curMHp, mName, mHp);
         showGameOver();
-        if (onDone) onDone();
         return;
       }
     }
@@ -1436,7 +1436,7 @@ function showGameOver() {
     金币: <b>${state.gold}</b> &nbsp; ATK: <b>${s.atk}</b> &nbsp; DEF: <b>${s.def}</b><br>
     <div style="font-size:24px;font-weight:bold;color:var(--accent);margin-top:8px;">评分: ${grade}</div>
   `;
-  document.getElementById('gameover-overlay').classList.add('active'); gameLogEvent('system', 'GAME OVER - HP=0');
+  document.getElementById('monster-info').style.display='none'; document.getElementById('gameover-overlay').classList.add('active'); gameLogEvent('system', 'GAME OVER - HP=0');
 }
 
 function canWalk(x, y) {
