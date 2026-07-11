@@ -230,7 +230,7 @@
 <body>
 
 
-<div id="game-status" style="position:fixed;top:2px;right:8px;font-size:10px;color:#0f0;z-index:1000;pointer-events:none;font-family:monospace;background:rgba(0,0,0,0.7);padding:2px 6px;border-radius:3px;">加载中...</div>
+<div id="game-status" style="position:fixed;top:2px;right:8px;font-size:9px;color:#0f0;z-index:1000;pointer-events:none;font-family:monospace;background:rgba(0,0,0,0.7);padding:3px 7px;border-radius:3px;line-height:1.4;white-space:pre;">加载中...</div>
 
 <div id="hud">
   <div class="floor" id="floor-label">第 1 层</div>
@@ -538,6 +538,7 @@ let currentMonsters = [];
 let currentItems = [];
 let defeatedThisFloor = new Set(); // key: "floor,x,y" for cross-floor persistence
 let pickedItems = new Set(); // key: "floor,x,y"
+let openedChests = new Set(); // persistent across floors
 function fk(x, y) { return `${state.floor},${x},${y}`; }
 
 // Inventory & history
@@ -1937,6 +1938,15 @@ function animate() {
   }
 
   updatePlayerLight();
+  // Update debug status bar (every 10 frames)
+  if (animFrame % 10 === 0) {
+    const qb = document.getElementById('quick-battle-cb')?.checked ?? true;
+    const sel = selectedMonster ? selectedMonster.data.name : '-';
+    const mn = Object.keys(monsterMeshes).length;
+    const it = Object.keys(itemMeshes).length;
+    document.getElementById('game-status').textContent =
+      `F${state.floor+1} (${state.px},${state.py}) HP${state.hp} | 👹${mn} 📦${it} | 战斗${qb?'⚡快速':'⚔️回合'} | 选中:${sel}`;
+  }
   // Update monster damage preview labels (throttled to every 15 frames)
   if ((animFrame = (animFrame || 0) + 1) % 15 === 0) updateMonsterLabels();
   renderer.render(scene, camera);
@@ -2073,6 +2083,7 @@ document.addEventListener('keydown', (e) => {
     state.steps = 0; state.monstersKilled = 0;
     defeatedThisFloor = new Set();
     pickedItems = new Set();
+    openedChests = new Set();
     inventory.length = 0; history.length = 0;
     buildFloor();
     updateHUD();
