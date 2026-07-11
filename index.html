@@ -62,6 +62,8 @@
   #hud .section-title { font-size:10px; color:#9399b2; margin-bottom:4px; font-weight:600; letter-spacing:0.5px; }
   #hud .inventory-grid { display:flex; flex-wrap:wrap; gap:3px; min-height:18px; }
   #hud .inv-item { font-size:14px; line-height:1; opacity:0.9; }
+  #hud .inv-equip { font-size:16px; cursor:pointer; opacity:1; }
+  #hud .inv-equip:hover { transform:scale(1.2); }
   #equip-display .eq-slot { cursor:pointer; padding:2px 4px; border-radius:4px; margin:2px 0; }
   #equip-display .eq-slot:hover { background:rgba(255,255,255,0.05); }
   #equip-display .eq-slot.equipped { color:var(--accent); }
@@ -259,7 +261,6 @@
       <div class="eq-slot" id="eq-shield" style="color:#a6adc8;">盾牌: 无</div>
       <div class="eq-slot" id="eq-armor" style="color:#a6adc8;">护甲: 无</div>
     </div>
-    <div id="equip-inv" style="font-size:10px;line-height:1.5;margin-top:4px;border-top:1px solid var(--border);padding-top:4px;color:#a6adc8;"></div>
   </div>
   <div class="hud-section">
     <div class="section-title">📦 背包</div>
@@ -402,12 +403,11 @@ function getStats() {
     stunChance:Math.min(0.5,Math.max(0,stun)),enemyMissChance:Math.min(0.5,Math.max(0,eMiss))};
 }
 
-
-
 // Item types
 const ITEM = {
   RED_GEM: 'rg', BLUE_GEM: 'bg', RED_POTION: 'rp', BLUE_POTION: 'bp',
   YELLOW_KEY: 'yk', BLUE_KEY: 'bk', RED_KEY: 'rk',
+  TREASURE: 'tr',
 };
 
 
@@ -510,12 +510,7 @@ let HIDDEN_WALLS = [
   [1,3,5],
 ];
 
-const CHESTS = [
-  [0,1,2,'frost_edge'],
-  [1,4,2,'round_buckler'],
-  [2,1,2,'chainmail'],
-  [3,1,2,'dragon_plate'],
-];
+// Chests are now generated randomly via generateAllMaps (ITEM.TREASURE items)
 
 const FLOOR_0_START = [5,9];
 // ============================================================
@@ -538,7 +533,6 @@ let currentMonsters = [];
 let currentItems = [];
 let defeatedThisFloor = new Set(); // key: "floor,x,y" for cross-floor persistence
 let pickedItems = new Set(); // key: "floor,x,y"
-let openedChests = new Set(); // persistent across floors
 function fk(x, y) { return `${state.floor},${x},${y}`; }
 
 // Inventory & history
@@ -640,7 +634,6 @@ let stairDownMesh = null;
 let wallMeshes = {};
 let selectedMonster = null; // {mesh, type, mx, my, data}
 let selectionRing = null; // yellow ring mesh
-let chestMeshes = {}; // keyed by "x,y" for chest removal
 
 // ============================================================
 // HELPER: world position from grid coords
@@ -673,7 +666,6 @@ function buildFloor() {
   doorMeshes = {};
   monsterMeshes = {};
   itemMeshes = {};
-  chestMeshes = {};
   stairMesh = null;
   stairDownMesh = null;
   wallMeshes = {};
@@ -833,34 +825,14 @@ function buildFloor() {
   // Spawn items
   const iDefs = ITEMS[floor] || [];
   currentItems = [];
-  for (const [itype, ix, iy] of iDefs) {
+  for (const entry of iDefs) {
+    const itype = entry[0], ix = entry[entry.length-2], iy = entry[entry.length-1];
+    const equipId = entry.length > 3 ? entry[1] : null;
     if (pickedItems.has(fk(ix, iy))) continue;
     const mesh = createItemMesh(itype, ix, iy);
     dynGroup.add(mesh);
-    itemMeshes[key(ix, iy)] = { mesh, type: itype };
-    currentItems.push({ type: itype, x: ix, y: iy });
-  }
-
-  // Spawn chests
-  const chestGeo = new THREE.BoxGeometry(0.6, 0.4, 0.4);
-  const chestMat = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.7, metalness: 0.3 });
-  for (const c of CHESTS) {
-    if (c[0] !== floor) continue;
-    const ck = `${c[0]},${c[1]},${c[2]}`;
-    if (openedChests.has(ck)) continue;
-    const cpos = gridToWorld(c[1], c[2]);
-    const chest = new THREE.Mesh(chestGeo, chestMat);
-    chest.position.set(cpos.x, 0.22, cpos.z);
-    chest.castShadow = true;
-    // Gold lid highlight
-    const lidGeo = new THREE.BoxGeometry(0.65, 0.08, 0.45);
-    const lidMat = new THREE.MeshStandardMaterial({ color: 0xDAA520, roughness: 0.5, metalness: 0.6 });
-    const lid = new THREE.Mesh(lidGeo, lidMat);
-    lid.position.y = 0.22;
-    chest.add(lid);
-    dynGroup.add(chest);
-    dynGroup.add(chest);
-    chestMeshes[key(c[1], c[2])] = chest;
+    itemMeshes[key(ix, iy)] = { mesh, type: itype, equipId };
+    currentItems.push({ type: itype, x: ix, y: iy, equipId });
   }
 
   // Create player
@@ -1094,6 +1066,15 @@ function createItemMesh(itype, ix, iy) {
     group.add(tooth2);
   }
 
+  if (itype === ITEM.TREASURE) {
+    const chestBody = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.35, 0.35), new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.7, metalness: 0.3 }));
+    chestBody.position.y = 0.2;
+    group.add(chestBody);
+    const lid = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.06, 0.4), new THREE.MeshStandardMaterial({ color: 0xDAA520, roughness: 0.5, metalness: 0.6 }));
+    lid.position.y = 0.4;
+    group.add(lid);
+  }
+
   group.position.set(pos.x, 0, pos.z);
   group.userData = {
     floatOffset: Math.random() * Math.PI * 2,
@@ -1261,6 +1242,12 @@ function doBattle(mx, my) {
       state.equipInv.push(dropId);
       showMessage(`🎁 Boss掉落: ${EQUIPMENT[dropId].icon} ${EQUIPMENT[dropId].name}`, false);
     }
+    if (info.type >= 4 && Math.random() < info.type * 0.06) {
+      const eqKeys = Object.keys(EQUIPMENT);
+      const dropId = eqKeys[Math.floor(Math.random()*eqKeys.length)];
+      state.equipInv.push(dropId);
+      showMessage(`🎁 ${m.name}掉落: ${EQUIPMENT[dropId].icon} ${EQUIPMENT[dropId].name}`, false);
+    }
     if (state.hp <= 0) showGameOver();
   } else {
     animateBattleLog(log, info.mesh, () => {
@@ -1277,6 +1264,12 @@ function doBattle(mx, my) {
         const dropId = BOSS_DROPS[Math.floor(Math.random()*BOSS_DROPS.length)];
         state.equipInv.push(dropId);
         showMessage(`🎁 Boss掉落: ${EQUIPMENT[dropId].icon} ${EQUIPMENT[dropId].name}`, false);
+      }
+      if (info.type >= 4 && Math.random() < info.type * 0.06) {
+        const eqKeys = Object.keys(EQUIPMENT);
+        const dropId = eqKeys[Math.floor(Math.random()*eqKeys.length)];
+        state.equipInv.push(dropId);
+        showMessage(`🎁 ${m.name}掉落: ${EQUIPMENT[dropId].icon} ${EQUIPMENT[dropId].name}`, false);
       }
       if (state.hp <= 0) showGameOver();
     });
@@ -1414,7 +1407,6 @@ function moveTo(nx, ny) {
   // Pickup items
   pickupItems(nx, ny);
   // Check chests
-  openChestIfPresent(nx, ny);
 
   // Check stairs
   checkStairs(nx, ny);
@@ -1451,6 +1443,13 @@ function pickupItems(x, y) {
     case ITEM.YELLOW_KEY: state.yellowKeys++; msg = '获得黄钥匙'; inventory.push({icon:'🔑',name:'黄钥匙'}); break;
     case ITEM.BLUE_KEY:   state.blueKeys++; msg = '获得蓝钥匙'; inventory.push({icon:'🔑',name:'蓝钥匙'}); break;
     case ITEM.RED_KEY:    state.redKeys++; msg = '获得红钥匙'; inventory.push({icon:'🔑',name:'红钥匙'}); break;
+    case ITEM.TREASURE:
+      if (info.equipId && EQUIPMENT[info.equipId]) {
+        state.equipInv.push(info.equipId);
+        const teq = EQUIPMENT[info.equipId];
+        msg = `🎁 获得装备: ${teq.name}`;
+      }
+      break;
   }
 
   pickedItems.add(fk(x, y));
@@ -1593,9 +1592,18 @@ function updateHUD() {
   const score = state.monstersKilled * 150 + state.gold * 12 + getStats().atk * 8 + getStats().def * 8 + state.hp - state.steps * 5;
   document.getElementById('score-val').textContent = Math.max(0, score);
 
-  // Inventory icons
+  // Inventory icons (consumables + equipment)
   const invGrid = document.getElementById('inventory-grid');
-  invGrid.innerHTML = inventory.slice(-12).map(i => `<span class="inv-item" title="${i.name}">${i.icon}</span>`).join('');
+  const invItems = [];
+  // Regular items
+  inventory.slice(-12).forEach(i => invItems.push(`<span class="inv-item" title="${i.name}">${i.icon}</span>`));
+  // Equipment items
+  state.equipInv.forEach((id, i) => {
+    const eq = EQUIPMENT[id];
+    if (!eq) return;
+    invItems.push(`<span class="inv-item inv-equip" data-eq-id="${id}" data-eq-idx="${i}" title="🛡 ${eq.name}\n${eq.desc}\n槽位:${eq.slot==='weapon'?'武器':eq.slot==='shield'?'盾牌':'护甲'}">${eq.icon}</span>`);
+  });
+  invGrid.innerHTML = invItems.join('');
 
   // Equipment display
   const slots = { weapon:'武器', shield:'盾牌', armor:'护甲' };
@@ -1984,31 +1992,7 @@ function createRNG(seed){let s=hashStr(String(seed));return function(){s|=0;s=s+
 function ensurePath(map,sx,sy,ex,ey,rng){const v=Array.from({length:11},()=>Array(11).fill(false));const q=[[sx,sy]];v[sy][sx]=true;while(q.length){const[cx,cy]=q.shift();for(const[dx,dy]of[[0,-1],[0,1],[-1,0],[1,0]]){const nx=cx+dx,ny=cy+dy;if(nx<0||nx>=11||ny<0||ny>=11||v[ny][nx])continue;if(map[ny][nx]===1)continue;v[ny][nx]=true;q.push([nx,ny]);}}if(!v[ey][ex]){let cx=sx,cy=sy;for(let s=0;s<100&&!(cx===ex&&cy===ey);s++){const dx=Math.sign(ex-cx),dy=Math.sign(ey-cy);let m=false;for(const[ddx,ddy]of[[dx,0],[0,dy],[dx,dy]]){const nx=cx+ddx,ny=cy+ddy;if(nx>=1&&nx<10&&ny>=1&&ny<10){if(map[ny][nx]===1){map[ny][nx]=0;m=true;cx=nx;cy=ny;break;}if(ddx||ddy){cx=nx;cy=ny;m=true;break;}}}if(!m)break;}}}
 function placeDoors(map,rng,fn){const n=2+Math.floor(rng()*3);for(let i=0;i<n;i++){const c=[];for(let y=2;y<9;y++)for(let x=2;x<9;x++){if(map[y][x]!==0)continue;const nW=map[y-1][x]===1,sW=map[y+1][x]===1,eW=map[y][x+1]===1,wW=map[y][x-1]===1;if((nW&&sW&&!eW&&!wW)||(eW&&wW&&!nW&&!sW))c.push([x,y]);}if(!c.length)break;const[dx,dy]=c[Math.floor(rng()*c.length)];const dt=fn>=3?(rng()<0.4?4:rng()<0.5?3:2):fn>=1?(rng()<0.5?3:2):2;map[dy][dx]=dt;}}
 function divideMaze(map,x1,y1,x2,y2,rng){const w=x2-x1;const h=y2-y1;if(w<2||h<2)return;let horizontal;if(w>h*1.5)horizontal=true;else if(h>w*1.5)horizontal=false;else horizontal=rng()<0.5;if(horizontal){let wallY=y1+1+Math.floor(rng()*(y2-y1-1));if(wallY<=y1)wallY=y1+1;if(wallY>=y2)wallY=y2-1;const gapX=x1+Math.floor(rng()*(x2-x1+1));for(let x=x1;x<=x2;x++){if(x!==gapX)map[wallY][x]=1;}if(rng()<0.25){const g2=x1+Math.floor(rng()*(x2-x1+1));if(g2!==gapX)map[wallY][g2]=0;}divideMaze(map,x1,y1,x2,wallY-1,rng);divideMaze(map,x1,wallY+1,x2,y2,rng);}else{let wallX=x1+1+Math.floor(rng()*(x2-x1-1));if(wallX<=x1)wallX=x1+1;if(wallX>=x2)wallX=x2-1;const gapY=y1+Math.floor(rng()*(y2-y1+1));for(let y=y1;y<=y2;y++){if(y!==gapY)map[y][wallX]=1;}if(rng()<0.25){const g2=y1+Math.floor(rng()*(y2-y1+1));if(g2!==gapY)map[g2][wallX]=0;}divideMaze(map,x1,y1,wallX-1,y2,rng);divideMaze(map,wallX+1,y1,x2,y2,rng);}}
-function generateAllMaps(seed){const rng=createRNG(seed);const maps=[],mons=[],its=[],hws=[];for(let f=0;f<5;f++){const map=Array.from({length:11},()=>Array(11).fill(0));for(let i=0;i<11;i++)map[0][i]=map[10][i]=map[i][0]=map[i][10]=1;divideMaze(map,1,1,9,9,rng);map[9][5]=0;for(const[dxx,dyy]of[[0,-1],[0,1],[-1,0],[1,0]]){const ax=5+dxx,ay=9+dyy;if(ax>=1&&ax<10&&ay>=1&&ay<10)map[ay][ax]=0;}const cand=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0&&!(x===5&&y===9))cand.push([x,y]);cand.sort((a,b)=>(Math.abs(b[0]-5)+Math.abs(b[1]-9))-(Math.abs(a[0]-5)+Math.abs(a[1]-9)));const[sx,sy]=cand[Math.floor(rng()*Math.min(5,cand.length))]||cand[0];map[sy][sx]=9;ensurePath(map,5,9,sx,sy,rng);for(const[dxx,dyy]of[[0,-1],[0,1],[-1,0],[1,0]]){const ax=sx+dxx,ay=sy+dyy;if(ax>=1&&ax<10&&ay>=1&&ay<10)map[ay][ax]=0;}placeDoors(map,rng,f);if(f>=1&&f<=3){const dt=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0&&!(x===sx&&y===sy))dt.push([x,y]);if(dt.length){const[dx,dy]=dt[Math.floor(rng()*dt.length)];map[dy][dx]=8;for(const[ddx,ddy]of[[0,-1],[0,1],[-1,0],[1,0]]){const ax=dx+ddx,ay=dy+ddy;if(ax>=1&&ax<10&&ay>=1&&ay<10)map[ay][ax]=0;}}}if(f===4){const dt=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0)dt.push([x,y]);if(dt.length){const[dx,dy]=dt[Math.floor(rng()*dt.length)];map[dy][dx]=8;for(const[ddx,ddy]of[[0,-1],[0,1],[-1,0],[1,0]]){const ax=dx+ddx,ay=dy+ddy;if(ax>=1&&ax<10&&ay>=1&&ay<10)map[ay][ax]=0;}}}const wl=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0)wl.push([x,y]);const pool=wl.filter(([x,y])=>!(x===5&&y===9)&&!(x===sx&&y===sy));const mc=3+f*2;const ms=[];const mt=f===4?[4,5,6,7]:f>=2?[2,3,4,5]:f>=1?[1,2,3,4]:[1,2];const mpool=[...pool];for(let i=0;i<mc&&mpool.length;i++){const idx=Math.floor(rng()*mpool.length);const[mx,my]=mpool.splice(idx,1)[0];ms.push([mt[Math.floor(rng()*mt.length)],mx,my]);}const id=[['rg','rp','yk','yk','bk'],['bg','rg','rp','bp','yk','yk','yk','bk'],['rg','rg','bg','bg','rp','rp','bp','yk','yk','yk','bk','rk'],['rg','rg','bg','bg','rp','rp','bp','bp','yk','yk','yk','yk','bk','bk','rk'],['rg','rg','rg','bg','bg','bg','rp','rp','rp','bp','bp','yk','yk','yk','bk','rk']];const items=[];const defs=id[Math.min(f,4)];const ipool=[...wl].filter(([x,y])=>!(x===5&&y===9)&&!(x===sx&&y===sy));for(let i=0;i<defs.length&&ipool.length;i++){const idx=Math.floor(rng()*ipool.length);const[ix,iy]=ipool.splice(idx,1)[0];items.push([defs[i],ix,iy]);}if(rng()<0.6){const wt=[];for(let y=2;y<9;y++)for(let x=2;x<9;x++)if(map[y][x]===1)wt.push([x,y]);if(wt.length){const[wx,wy]=wt[Math.floor(rng()*wt.length)];hws.push([f,wx,wy]);}}maps.push(map);mons.push(ms);its.push(items);}for(let f=0;f<4;f++){let ux=-1,uy=-1;for(let y=0;y<11;y++)for(let x=0;x<11;x++)if(maps[f][y][x]===9){ux=x;uy=y;break;}for(let y=0;y<11;y++)for(let x=0;x<11;x++)if(maps[f+1][y][x]===8){maps[f+1][y][x]=0;break;}if(ux>=0){maps[f+1][uy][ux]=0;maps[f+1][uy][ux]=8;}}return{maps,monsters:mons,items:its,hiddenWalls:hws};}
-
-function openChestIfPresent(x, y) {
-  for (const c of CHESTS) {
-    if (c[0] === state.floor && c[1] === x && c[2] === y) {
-      const ck = `${c[0]},${c[1]},${c[2]}`;
-      if (openedChests.has(ck)) return;
-      openedChests.add(ck);
-      const eq = EQUIPMENT[c[3]];
-      state.equipInv.push(c[3]);
-      // Remove chest mesh
-      const ck2 = key(x, y);
-      if (chestMeshes[ck2]) {
-        const m = chestMeshes[ck2];
-        const anim = setInterval(() => {
-          if (m.scale.x <= 0) { clearInterval(anim); dynGroup.remove(m); delete chestMeshes[ck2]; }
-          m.scale.setScalar(Math.max(0, m.scale.x - 0.1));
-        }, 20);
-      }
-      updateHUD();
-      showMessage(`🎁 获得装备: ${eq.name}`, false);
-      return;
-    }
-  }
-}
+function generateAllMaps(seed){const rng=createRNG(seed);const maps=[],mons=[],its=[],hws=[];for(let f=0;f<5;f++){const map=Array.from({length:11},()=>Array(11).fill(0));for(let i=0;i<11;i++)map[0][i]=map[10][i]=map[i][0]=map[i][10]=1;divideMaze(map,1,1,9,9,rng);map[9][5]=0;for(const[dxx,dyy]of[[0,-1],[0,1],[-1,0],[1,0]]){const ax=5+dxx,ay=9+dyy;if(ax>=1&&ax<10&&ay>=1&&ay<10)map[ay][ax]=0;}const cand=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0&&!(x===5&&y===9))cand.push([x,y]);cand.sort((a,b)=>(Math.abs(b[0]-5)+Math.abs(b[1]-9))-(Math.abs(a[0]-5)+Math.abs(a[1]-9)));const[sx,sy]=cand[Math.floor(rng()*Math.min(5,cand.length))]||cand[0];map[sy][sx]=9;ensurePath(map,5,9,sx,sy,rng);for(const[dxx,dyy]of[[0,-1],[0,1],[-1,0],[1,0]]){const ax=sx+dxx,ay=sy+dyy;if(ax>=1&&ax<10&&ay>=1&&ay<10)map[ay][ax]=0;}placeDoors(map,rng,f);if(f>=1&&f<=3){const dt=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0&&!(x===sx&&y===sy))dt.push([x,y]);if(dt.length){const[dx,dy]=dt[Math.floor(rng()*dt.length)];map[dy][dx]=8;for(const[ddx,ddy]of[[0,-1],[0,1],[-1,0],[1,0]]){const ax=dx+ddx,ay=dy+ddy;if(ax>=1&&ax<10&&ay>=1&&ay<10)map[ay][ax]=0;}}}if(f===4){const dt=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0)dt.push([x,y]);if(dt.length){const[dx,dy]=dt[Math.floor(rng()*dt.length)];map[dy][dx]=8;for(const[ddx,ddy]of[[0,-1],[0,1],[-1,0],[1,0]]){const ax=dx+ddx,ay=dy+ddy;if(ax>=1&&ax<10&&ay>=1&&ay<10)map[ay][ax]=0;}}}const wl=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0)wl.push([x,y]);const pool=wl.filter(([x,y])=>!(x===5&&y===9)&&!(x===sx&&y===sy));const mc=3+f*2;const ms=[];const mt=f===4?[4,5,6,7]:f>=2?[2,3,4,5]:f>=1?[1,2,3,4]:[1,2];const mpool=[...pool];for(let i=0;i<mc&&mpool.length;i++){const idx=Math.floor(rng()*mpool.length);const[mx,my]=mpool.splice(idx,1)[0];ms.push([mt[Math.floor(rng()*mt.length)],mx,my]);}const id=[['rg','rp','yk','yk','bk'],['bg','rg','rp','bp','yk','yk','yk','bk'],['rg','rg','bg','bg','rp','rp','bp','yk','yk','yk','bk','rk'],['rg','rg','bg','bg','rp','rp','bp','bp','yk','yk','yk','yk','bk','bk','rk'],['rg','rg','rg','bg','bg','bg','rp','rp','rp','bp','bp','yk','yk','yk','bk','rk']];const items=[];const defs=id[Math.min(f,4)];const ipool=[...wl].filter(([x,y])=>!(x===5&&y===9)&&!(x===sx&&y===sy));for(let i=0;i<defs.length&&ipool.length;i++){const idx=Math.floor(rng()*ipool.length);const[ix,iy]=ipool.splice(idx,1)[0];items.push([defs[i],ix,iy]);}if(rng()<0.6){const wt=[];for(let y=2;y<9;y++)for(let x=2;x<9;x++)if(map[y][x]===1)wt.push([x,y]);if(wt.length){const[wx,wy]=wt[Math.floor(rng()*wt.length)];hws.push([f,wx,wy]);}}const ec=f===4?2:Math.floor(rng()*2);const eqKeys=Object.keys(EQUIPMENT);for(let i=0;i<ec;i++){const eqId=eqKeys[Math.floor(rng()*eqKeys.length)];const cp=pool.splice(Math.floor(rng()*pool.length),1);if(cp&&cp.length)items.push(['tr',eqId,cp[0],cp[1]]);}maps.push(map);mons.push(ms);its.push(items);}for(let f=0;f<4;f++){let ux=-1,uy=-1;for(let y=0;y<11;y++)for(let x=0;x<11;x++)if(maps[f][y][x]===9){ux=x;uy=y;break;}for(let y=0;y<11;y++)for(let x=0;x<11;x++)if(maps[f+1][y][x]===8){maps[f+1][y][x]=0;break;}if(ux>=0){maps[f+1][uy][ux]=0;maps[f+1][uy][ux]=8;}}return{maps,monsters:mons,items:its,hiddenWalls:hws};}
 
 // Click equipped slot to unequip
 document.addEventListener('click', (e) => {
@@ -2027,7 +2011,7 @@ document.addEventListener('click', (e) => {
 
 // Double-click equipment in inventory to equip
 document.addEventListener('dblclick', (e) => {
-  const item = e.target.closest('.eq-inv-item');
+  const item = e.target.closest('.inv-equip');
   if (!item) return;
   const id = item.dataset.eqId;
   const idx = parseInt(item.dataset.eqIdx);
@@ -2056,6 +2040,28 @@ document.addEventListener('dblclick', (e) => {
   updateHUD();
   showMessage(`装备 ${eq.icon} ${eq.name}`, false);
 });
+
+// Single-click equipment to show attributes
+document.addEventListener('click', (e) => {
+  const item = e.target.closest('.inv-equip');
+  if (!item) return;
+  const id = item.dataset.eqId;
+  const eq = EQUIPMENT[id];
+  if (!eq) return;
+  const panel = document.getElementById('monster-info');
+  if (!panel) return;
+  panel.style.display = 'block';
+  panel.innerHTML = `
+    <div class="section-title">${eq.icon} ${eq.name}</div>
+    <div style="font-size:11px;line-height:1.6;color:#a6adc8;">
+      ${eq.desc}<br>
+      槽位: ${eq.slot==='weapon'?'⚔️武器':eq.slot==='shield'?'🛡️盾牌':'🧥护甲'}<br>
+      ${eq.atk ? '攻击 +'+eq.atk : ''}${eq.def ? ' 防御 +'+eq.def : ''}<br>
+      ${eq.atkSpeed ? '攻速 '+((eq.atkSpeed>0?'+':'')+eq.atkSpeed) : ''}
+    </div>
+  `;
+  e.stopPropagation();
+}, true);
 
 // ============================================================
 // INIT
@@ -2102,7 +2108,6 @@ document.addEventListener('keydown', (e) => {
     state.weapon = null; state.shield = null; state.armor = null; state.equipInv = [];
     defeatedThisFloor = new Set();
     pickedItems = new Set();
-    openedChests = new Set();
     inventory.length = 0; history.length = 0;
     buildFloor();
     updateHUD();
