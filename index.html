@@ -62,6 +62,9 @@
   #hud .section-title { font-size:10px; color:#9399b2; margin-bottom:4px; font-weight:600; letter-spacing:0.5px; }
   #hud .inventory-grid { display:flex; flex-wrap:wrap; gap:3px; min-height:18px; }
   #hud .inv-item { font-size:14px; line-height:1; opacity:0.9; }
+  #equip-display .eq-slot { cursor:pointer; padding:2px 4px; border-radius:4px; margin:2px 0; }
+  #equip-display .eq-slot:hover { background:rgba(255,255,255,0.05); }
+  #equip-display .eq-slot.equipped { color:var(--accent); }
   #hud .history-list { flex:1; overflow-y:auto; min-height:0; }
   #hud .history-entry { font-size:10px; color:#9399b2; padding:1px 0; word-break:break-all; line-height:1.3; }
   #hud .history-entry:first-child { color:#cdd6f4; }
@@ -248,6 +251,15 @@
   </div>
   <div class="stat">
     <span class="label">⭐ 积分</span><span class="val" id="score-val" style="color:var(--accent);">0</span>
+  </div>
+  <div class="hud-section">
+    <div class="section-title">⚔️ 装备</div>
+    <div id="equip-display" style="font-size:11px;line-height:1.6;">
+      <div class="eq-slot" id="eq-weapon" style="color:#a6adc8;">武器: 无</div>
+      <div class="eq-slot" id="eq-shield" style="color:#a6adc8;">盾牌: 无</div>
+      <div class="eq-slot" id="eq-armor" style="color:#a6adc8;">护甲: 无</div>
+    </div>
+    <div id="equip-inv" style="font-size:10px;line-height:1.5;margin-top:4px;border-top:1px solid var(--border);padding-top:4px;color:#a6adc8;"></div>
   </div>
   <div class="hud-section">
     <div class="section-title">📦 背包</div>
@@ -627,6 +639,7 @@ let stairDownMesh = null;
 let wallMeshes = {};
 let selectedMonster = null; // {mesh, type, mx, my, data}
 let selectionRing = null; // yellow ring mesh
+let chestMeshes = {}; // keyed by "x,y" for chest removal
 
 // ============================================================
 // HELPER: world position from grid coords
@@ -659,6 +672,7 @@ function buildFloor() {
   doorMeshes = {};
   monsterMeshes = {};
   itemMeshes = {};
+  chestMeshes = {};
   stairMesh = null;
   stairDownMesh = null;
   wallMeshes = {};
@@ -824,6 +838,28 @@ function buildFloor() {
     dynGroup.add(mesh);
     itemMeshes[key(ix, iy)] = { mesh, type: itype };
     currentItems.push({ type: itype, x: ix, y: iy });
+  }
+
+  // Spawn chests
+  const chestGeo = new THREE.BoxGeometry(0.6, 0.4, 0.4);
+  const chestMat = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.7, metalness: 0.3 });
+  for (const c of CHESTS) {
+    if (c[0] !== floor) continue;
+    const ck = `${c[0]},${c[1]},${c[2]}`;
+    if (openedChests.has(ck)) continue;
+    const cpos = gridToWorld(c[1], c[2]);
+    const chest = new THREE.Mesh(chestGeo, chestMat);
+    chest.position.set(cpos.x, 0.22, cpos.z);
+    chest.castShadow = true;
+    // Gold lid highlight
+    const lidGeo = new THREE.BoxGeometry(0.65, 0.08, 0.45);
+    const lidMat = new THREE.MeshStandardMaterial({ color: 0xDAA520, roughness: 0.5, metalness: 0.6 });
+    const lid = new THREE.Mesh(lidGeo, lidMat);
+    lid.position.y = 0.22;
+    chest.add(lid);
+    dynGroup.add(chest);
+    dynGroup.add(chest);
+    chestMeshes[key(c[1], c[2])] = chest;
   }
 
   // Create player
@@ -1231,13 +1267,16 @@ let battleAnimating = false;
 
 function animateBattleLog(log, monsterMesh, onDone) {
   let i = 0;
+  const wp = new THREE.Vector3();
   const ival = setInterval(() => {
     if (i >= log.length || !monsterMesh.parent) { clearInterval(ival); if(onDone)onDone(); return; }
     const e = log[i];
-    // Position: above monster for player attacks, above player for monster attacks
+    // Use getWorldPosition for correct screen projection
     const srcMesh = e.actor === 'monster' ? playerMesh : monsterMesh;
-    const wp = srcMesh.position.clone(); wp.y += 1.2;
+    if (!srcMesh) { i++; return; }
+    srcMesh.getWorldPosition(wp); wp.y += 1.2;
     const sp = wp.clone().project(camera);
+    if (Math.abs(sp.z) > 1) { i++; return; } // off-screen
     const sx = (sp.x*0.5+0.5)*window.innerWidth, sy = (-sp.y*0.5+0.5)*window.innerHeight;
     let text, color;
     if (e.actor==='player') {
@@ -1249,6 +1288,9 @@ function animateBattleLog(log, monsterMesh, onDone) {
       if (e.type==='miss') { text='闪避'; color='#8f8'; }
       else if (e.type==='crit') { text='💥'+e.dmg; color='#f44'; }
       else { text='-'+e.dmg; color='#f66'; }
+      // Real-time HP decrease per hit
+      state.hp = Math.max(0, state.hp - (e.dmg||0));
+      updateHUD();
     }
     const el = document.createElement('div'); el.className='float-text'; el.textContent=text;
     el.style.cssText = `color:${color};left:${sx}px;top:${sy}px;font-weight:${e.type==='crit'?'900':'600'};font-size:${e.type==='crit'?'20px':'14px'}`;
@@ -1351,6 +1393,8 @@ function moveTo(nx, ny) {
 
   // Pickup items
   pickupItems(nx, ny);
+  // Check chests
+  openChestIfPresent(nx, ny);
 
   // Check stairs
   checkStairs(nx, ny);
@@ -1533,6 +1577,30 @@ function updateHUD() {
   // Inventory icons
   const invGrid = document.getElementById('inventory-grid');
   invGrid.innerHTML = inventory.slice(-12).map(i => `<span class="inv-item" title="${i.name}">${i.icon}</span>`).join('');
+
+  // Equipment display
+  const slots = { weapon:'武器', shield:'盾牌', armor:'护甲' };
+  for (const [slot, label] of Object.entries(slots)) {
+    const el = document.getElementById('eq-' + slot);
+    if (!el) continue;
+    const eq = state[slot];
+    if (eq) {
+      el.className = 'eq-slot equipped';
+      el.textContent = `${eq.icon} ${label}: ${eq.name}`;
+    } else {
+      el.className = 'eq-slot';
+      el.textContent = `${label}: 无`;
+    }
+  }
+  // Unequipped gear
+  const einv = document.getElementById('equip-inv');
+  if (einv && state.equipInv.length > 0) {
+    einv.innerHTML = state.equipInv.map((id, i) => {
+      const eq = EQUIPMENT[id];
+      if (!eq) return '';
+      return `<span class="eq-inv-item" data-eq-id="${id}" data-eq-idx="${i}" style="cursor:pointer;margin:0 3px;" title="双击装备 | ${eq.desc}">${eq.icon}</span>`;
+    }).join('');
+  }
 
   // History log
   const histList = document.getElementById('history-list');
@@ -1899,11 +1967,11 @@ function openChestIfPresent(x, y) {
       const eq = EQUIPMENT[c[3]];
       state.equipInv.push(c[3]);
       // Remove chest mesh
-      const ik = key(x, y);
-      if (itemMeshes[ik]) {
-        const m = itemMeshes[ik].mesh;
+      const ck2 = key(x, y);
+      if (chestMeshes[ck2]) {
+        const m = chestMeshes[ck2];
         const anim = setInterval(() => {
-          if (m.scale.x <= 0) { clearInterval(anim); dynGroup.remove(m); delete itemMeshes[ik]; }
+          if (m.scale.x <= 0) { clearInterval(anim); dynGroup.remove(m); delete chestMeshes[ck2]; }
           m.scale.setScalar(Math.max(0, m.scale.x - 0.1));
         }, 20);
       }
