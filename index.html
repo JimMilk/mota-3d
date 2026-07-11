@@ -257,6 +257,7 @@
     <div class="section-title">📜 记录</div>
     <div class="history-list" id="history-list"></div>
   </div>
+  <div class="hud-section" id="monster-info" style="display:none;"></div>
 </div>
 
 <div id="minimap"><canvas id="minimap-canvas" width="132" height="132"></canvas></div>
@@ -350,13 +351,13 @@ const SIZE = 11; // 11x11 grid
 
 // Monster definitions: [name, hp, atk, def, gold, color]
 const MONSTER_DB = {
-  1: { name:'绿色史莱姆', hp:50, atk:20, def:1, atkSpeed:0.8, gold:1, color:0x44cc44 },
-  2: { name:'红色史莱姆', hp:70, atk:15, def:2, atkSpeed:0.85, gold:2, color:0xcc3333 },
-  3: { name:'小蝙蝠', hp:100, atk:20, def:5, atkSpeed:1.2, gold:3, color:0x666688 },
-  4: { name:'骷髅兵', hp:150, atk:40, def:10, atkSpeed:0.7, gold:8, color:0xcccccc },
-  5: { name:'骷髅法师', hp:120, atk:60, def:8, atkSpeed:0.6, gold:10, color:0x8888cc },
-  6: { name:'初级守卫', hp:200, atk:50, def:20, atkSpeed:0.55, gold:15, color:0xff8833 },
-  7: { name:'石像鬼(Boss)', hp:350, atk:70, def:25, atkSpeed:0.45, gold:100, color:0xff2222 },
+  1: { name:'绿色史莱姆', hp:50, atk:20, def:1, atkSpeed:0.5, critRate:0.03, critDmg:1.4, missChance:0.05, gold:1, color:0x44cc44 },
+  2: { name:'红色史莱姆', hp:70, atk:15, def:2, atkSpeed:0.55, critRate:0.04, critDmg:1.5, missChance:0.04, gold:2, color:0xcc3333 },
+  3: { name:'小蝙蝠', hp:100, atk:20, def:5, atkSpeed:0.8, critRate:0.06, critDmg:1.6, missChance:0.08, gold:3, color:0x666688 },
+  4: { name:'骷髅兵', hp:150, atk:40, def:10, atkSpeed:0.45, critRate:0.05, critDmg:1.5, missChance:0.04, gold:8, color:0xcccccc },
+  5: { name:'骷髅法师', hp:120, atk:60, def:8, atkSpeed:0.4, critRate:0.08, critDmg:1.8, missChance:0.03, gold:10, color:0x8888cc },
+  6: { name:'初级守卫', hp:200, atk:50, def:20, atkSpeed:0.35, critRate:0.07, critDmg:1.6, missChance:0.06, gold:15, color:0xff8833 },
+  7: { name:'石像鬼(Boss)', hp:350, atk:70, def:25, atkSpeed:0.3, critRate:0.10, critDmg:2.0, missChance:0.05, gold:100, color:0xff2222 },
 };
 // ============================================================
 // EQUIPMENT DEFINITIONS
@@ -624,6 +625,8 @@ let itemMeshes = {}; // "x,y" -> {mesh, type}
 let stairMesh = null;
 let stairDownMesh = null;
 let wallMeshes = {};
+let selectedMonster = null; // {mesh, type, mx, my, data}
+let selectionRing = null; // yellow ring mesh
 
 // ============================================================
 // HELPER: world position from grid coords
@@ -648,6 +651,7 @@ function isHiddenWall(floor, x, y) {
 // ============================================================
 
 function buildFloor() {
+  clearSelection();
   // Clear dynamic objects
   while (dynGroup.children.length > 0) {
     dynGroup.remove(dynGroup.children[0]);
@@ -1167,7 +1171,8 @@ function doBattle(mx, my) {
     pHp = state.hp - loss; mHp = 0;
     log.push({actor:'player',type:'hit',dmg:Math.round(avgPDmg)});
   } else {
-    const pInterval = 1.0 / s.atkSpeed, mInterval = 1.0 / (m.atkSpeed || 0.8);
+    const spdMul = 3.0; // slower combat
+    const pInterval = spdMul / Math.max(s.atkSpeed, 0.2), mInterval = spdMul / Math.max(m.atkSpeed, 0.2);
     let pNext = 0, mNext = 0;
     while (pHp > 0 && mHp > 0) {
       if (pNext <= mNext) {
@@ -1178,13 +1183,18 @@ function doBattle(mx, my) {
           const dmg = Math.round(isCrit ? pRawDmg * s.critDmg : pRawDmg);
           mHp -= dmg; log.push({actor:'player',type:isCrit?'crit':'hit',dmg});
           if (Math.random() < s.stunChance && mHp > 0) {
-            mNext += 0.6; log.push({actor:'player',type:'stun'});
+            mNext += 0.6 * spdMul; log.push({actor:'player',type:'stun'});
           }
         }
         pNext += pInterval;
       } else {
-        if (Math.random() < s.enemyMissChance) { log.push({actor:'monster',type:'miss'}); }
-        else { pHp -= mRawDmg; log.push({actor:'monster',type:'hit',dmg:mRawDmg}); }
+        const mRoll = Math.random();
+        if (mRoll < (m.missChance||0) * (1 + s.enemyMissChance)) { log.push({actor:'monster',type:'miss'}); }
+        else {
+          const mCrit = mRoll < (m.missChance||0) * (1 + s.enemyMissChance) + (m.critRate||0);
+          const mdmg = Math.round(mCrit ? mRawDmg * (m.critDmg||1.5) : mRawDmg);
+          pHp -= mdmg; log.push({actor:'monster',type:mCrit?'crit':'hit',dmg:mdmg});
+        }
         mNext += mInterval;
       }
     }
@@ -1224,7 +1234,9 @@ function animateBattleLog(log, monsterMesh, onDone) {
   const ival = setInterval(() => {
     if (i >= log.length || !monsterMesh.parent) { clearInterval(ival); if(onDone)onDone(); return; }
     const e = log[i];
-    const wp = monsterMesh.position.clone(); wp.y += 1.2;
+    // Position: above monster for player attacks, above player for monster attacks
+    const srcMesh = e.actor === 'monster' ? playerMesh : monsterMesh;
+    const wp = srcMesh.position.clone(); wp.y += 1.2;
     const sp = wp.clone().project(camera);
     const sx = (sp.x*0.5+0.5)*window.innerWidth, sy = (-sp.y*0.5+0.5)*window.innerHeight;
     let text, color;
@@ -1235,6 +1247,7 @@ function animateBattleLog(log, monsterMesh, onDone) {
       else { text='-'+e.dmg; color='#fff'; }
     } else {
       if (e.type==='miss') { text='闪避'; color='#8f8'; }
+      else if (e.type==='crit') { text='💥'+e.dmg; color='#f44'; }
       else { text='-'+e.dmg; color='#f66'; }
     }
     const el = document.createElement('div'); el.className='float-text'; el.textContent=text;
@@ -1243,12 +1256,13 @@ function animateBattleLog(log, monsterMesh, onDone) {
     requestAnimationFrame(()=>{el.style.transform='translateY(-36px)';el.style.opacity='0';});
     setTimeout(()=>el.remove(),900);
     i++;
-  }, 180);
+  }, 250);
 }
 
 function updateMonsterLabels() {
   document.querySelectorAll('.monster-hp-label').forEach(el=>el.remove());
   const px = state.px, py = state.py;
+  const quickBattle = document.getElementById('quick-battle-cb')?.checked ?? true;
   for (const [k, info] of Object.entries(monsterMeshes)) {
     // Parse grid position from key: "x,y"
     const [mx, my] = k.split(',').map(Number);
@@ -1259,7 +1273,11 @@ function updateMonsterLabels() {
     const sp = wp.clone().project(camera);
     const sx = (sp.x*0.5+0.5)*window.innerWidth, sy = (-sp.y*0.5+0.5)*window.innerHeight;
     const el = document.createElement('div'); el.className='monster-hp-label';
-    el.innerHTML = `<span style="color:${preview.canWin?'#ff6666':'#888'}">${preview.canWin?'-'+preview.estLoss+'HP':'⚠️'}</span>`;
+    if (quickBattle) {
+      el.innerHTML = `<span style="color:${preview.canWin?'#ff6666':'#888'}">${preview.canWin?'-'+preview.estLoss+'HP':'⚠️'}</span>`;
+    } else {
+      el.innerHTML = `<span style="color:#89b4fa;font-size:10px">${info.data.name}</span>`;
+    }
     el.style.cssText = `left:${sx}px;top:${sy-24}px`;
     document.body.appendChild(el);
   }
@@ -1593,6 +1611,32 @@ function updateMinimap() {
   ctx.stroke();
 }
 
+function updateMonsterInfo() {
+  const panel = document.getElementById('monster-info');
+  if (!panel) return;
+  if (!selectedMonster) {
+    panel.style.display = 'none';
+    return;
+  }
+  panel.style.display = 'block';
+  const m = selectedMonster.data;
+  panel.innerHTML = `
+    <div class="section-title">👹 ${m.name}</div>
+    <div style="font-size:11px;line-height:1.6;color:#a6adc8;">
+      ❤️ 生命: ${m.hp}<br>
+      ⚔️ 攻击: ${m.atk} &nbsp; 🛡️ 防御: ${m.def}<br>
+      ⏱ 攻速: ${m.atkSpeed} &nbsp; 💥 暴击: ${Math.round(m.critRate*100)}%<br>
+      🎯 暴伤: ${(m.critDmg||1.5).toFixed(1)}x &nbsp; 🌫 失手: ${Math.round(m.missChance*100)}%
+    </div>
+  `;
+}
+
+function clearSelection() {
+  if (selectionRing) { dynGroup.remove(selectionRing); selectionRing = null; }
+  selectedMonster = null;
+  updateMonsterInfo();
+}
+
 function showMessage(text, isWarn) {
   const el = document.getElementById('message');
   el.textContent = text;
@@ -1680,13 +1724,44 @@ const mouse = new THREE.Vector2();
 window.addEventListener('click', (e) => {
   const overlay = document.getElementById('battle-overlay');
   if (overlay.classList.contains('active')) return;
-  if (isMoving) return;
+  if (isMoving || battleAnimating) return;
   if (e.target.tagName === 'BUTTON' || e.target.closest('#hud') || e.target.closest('#minimap')) return;
 
   mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
   mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
   raycaster.setFromCamera(mouse, camera);
 
+  // Clear previous monster selection
+  if (selectionRing) { dynGroup.remove(selectionRing); selectionRing = null; }
+  selectedMonster = null;
+
+  // Check monster hits first
+  const monsterList = Object.values(monsterMeshes).map(m => m.mesh);
+  const mHits = raycaster.intersectObjects(monsterList, true);
+  if (mHits.length > 0) {
+    let hitObj = mHits[0].object;
+    while (hitObj && hitObj.parent !== dynGroup && hitObj.parent) hitObj = hitObj.parent;
+    for (const [k, info] of Object.entries(monsterMeshes)) {
+      if (info.mesh === hitObj) {
+        selectedMonster = info;
+        const [mx, my] = k.split(',').map(Number);
+        selectedMonster.mx = mx; selectedMonster.my = my;
+        const ringGeo = new THREE.TorusGeometry(0.45, 0.04, 16, 32);
+        const ringMat = new THREE.MeshBasicMaterial({ color: 0xffcc00 });
+        selectionRing = new THREE.Mesh(ringGeo, ringMat);
+        selectionRing.rotation.x = -Math.PI / 2;
+        selectionRing.position.copy(info.mesh.position);
+        selectionRing.position.y = 0.06;
+        dynGroup.add(selectionRing);
+        break;
+      }
+    }
+    updateMonsterInfo();
+    return;
+  }
+  updateMonsterInfo();
+
+  // Otherwise, click-to-move
   const intersects = raycaster.intersectObjects(dynGroup.children, true);
   if (intersects.length > 0) {
     const point = intersects[0].point;
@@ -1799,6 +1874,10 @@ function animate() {
   renderer.render(scene, camera);
 }
 
+// ============================================================
+// MONSTER CLICK SELECTION - integrated into click-to-move
+// ============================================================
+
 
 // ============================================================
 // RANDOM MAP GENERATOR
@@ -1898,8 +1977,8 @@ function regenerateMaps(seed) {
   document.getElementById('seed-display').textContent = seed;
 }
 
-// Use preset maps by default (validated, hand-crafted feel)
-// Press G to generate a random map instead
+// Use random map generation on startup
+regenerateMaps(Date.now().toString(36).slice(-6));
 
 buildFloor();
 updatePlayerLight();
