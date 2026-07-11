@@ -414,7 +414,7 @@ function getStats() {
 const ITEM = {
   RED_GEM: 'rg', BLUE_GEM: 'bg', RED_POTION: 'rp', BLUE_POTION: 'bp',
   YELLOW_KEY: 'yk', BLUE_KEY: 'bk', RED_KEY: 'rk',
-  TREASURE: 'tr',
+  TREASURE: 'tr', SHOP: 'sh',
 };
 
 
@@ -539,7 +539,15 @@ const state = {
 let currentMonsters = [];
 let currentItems = [];
 let defeatedThisFloor = new Set(); // key: "floor,x,y" for cross-floor persistence
-let pickedItems = new Set(); // key: "floor,x,y"
+let pickedItems = new Set();
+let gameLog = [];
+function gameLogEvent(cat, msg) {
+  const ts = Date.now();
+  gameLog.push({ts, cat, msg});
+  if (gameLog.length > 500) gameLog.shift();
+  console.debug(`[${cat}]`, msg);
+}
+ // key: "floor,x,y"
 function fk(x, y) { return `${state.floor},${x},${y}`; }
 function removeFromInventory(name) {
   const idx = inventory.findIndex(i => i.name === name);
@@ -1093,6 +1101,28 @@ function createItemMesh(itype, ix, iy) {
   return group;
 }
 
+
+function createDynamicStairMesh(x, y) {
+  const group = new THREE.Group();
+  const pos = gridToWorld(x, y);
+  const mat = new THREE.MeshStandardMaterial({ color: 0xf5c842, roughness: 0.4, metalness: 0.3, emissive: 0x332200, emissiveIntensity: 0.7 });
+  const pillarH = 0.35;
+  const leftPole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, pillarH, 8), mat);
+  leftPole.position.set(-0.25, pillarH/2, 0); group.add(leftPole);
+  const rightPole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, pillarH, 8), mat);
+  rightPole.position.set(0.25, pillarH/2, 0); group.add(rightPole);
+  for (let i = 0; i < 5; i++) {
+    const rung = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.03, 0.06), mat);
+    rung.position.set(0, 0.06 + i * 0.07, 0); group.add(rung);
+  }
+  const glowGeo = new THREE.TorusGeometry(0.32, 0.05, 8, 16);
+  const glowMat = new THREE.MeshStandardMaterial({ color: 0xf5c842, roughness: 0.2, metalness: 0.5, emissive: 0x553300, emissiveIntensity: 1.0 });
+  const glow = new THREE.Mesh(glowGeo, glowMat);
+  glow.rotation.x = Math.PI / 2; glow.position.y = 0.02; group.add(glow);
+  group.position.set(pos.x, 0, pos.z);
+  return group;
+}
+
 function createPlayerMesh() {
   if (playerMesh) dynGroup.remove(playerMesh);
   const group = new THREE.Group();
@@ -1200,7 +1230,7 @@ function doBattle(mx, my) {
     pHp = state.hp - loss; mHp = 0;
     log.push({actor:'player',type:'hit',dmg:Math.round(avgPDmg)});
   } else {
-    const spdMul = 3.0; // slower combat
+    const spdMul = 7.0; // slower combat
     const pInterval = spdMul / Math.max(s.atkSpeed, 0.2), mInterval = spdMul / Math.max(m.atkSpeed, 0.2);
     let pNext = 0, mNext = 0;
     while (pHp > 0 && mHp > 0) {
@@ -1267,7 +1297,8 @@ function doBattle(mx, my) {
       dynGroup.remove(info.mesh);
       battleAnimating = false;
       updateHUD(); updateMinimap(); updateMonsterLabels();
-      showMessage(`击败${m.name}！损失 ${loss} HP`, false);
+      showMessage(`击败${m.name}！损失 ${loss} HP`, false); gameLogEvent('combat', `beat ${m.name} loss${loss}HP`);
+      if (info.type === 7 && state.floor === 4) { MAPS[4][my][mx] = 9; const bpos=gridToWorld(mx,my); const bstair=createStairMesh(9, mx, my); bstair.position.set(bpos.x,0,bpos.z); dynGroup.add(bstair); showMessage('👑 Boss已死！通向胜利的阶梯出现', false); }
       if (info.type === 7 && state.floor === MAPS.length - 1) {
         setTimeout(() => document.getElementById('victory-overlay').classList.add('active'), 600);
       }
@@ -1355,6 +1386,35 @@ function updateMonsterLabels() {
   }
 }
 
+
+function openShop() {
+  const s = getStats();
+  const prices = [
+    {label:'❤️ +100HP 血瓶', cost:25, action(){ state.hp=Math.min(state.hp+100,state.maxHp); state.maxHp=Math.max(state.maxHp,state.hp); showMessage('购买: +100HP',false); updateHUD(); }},
+    {label:'❤️ +500HP 大血瓶', cost:100, action(){ state.hp=Math.min(state.hp+500,state.maxHp); state.maxHp=Math.max(state.maxHp,state.hp); showMessage('购买: +500HP',false); updateHUD(); }},
+    {label:'🟡 黄钥匙', cost:15, action(){ state.yellowKeys++; inventory.push({icon:'🟡',name:'黄钥匙'}); showMessage('购买: 黄钥匙',false); updateHUD(); }},
+    {label:'🔵 蓝钥匙', cost:40, action(){ state.blueKeys++; inventory.push({icon:'🔵',name:'蓝钥匙'}); showMessage('购买: 蓝钥匙',false); updateHUD(); }},
+    {label:'⚔️ 攻击+1', cost:50, action(){ state.baseAtk+=1; showMessage('购买: ATK+1',false); updateHUD(); }},
+    {label:'🛡️ 防御+1', cost:50, action(){ state.baseDef+=1; showMessage('购买: DEF+1',false); updateHUD(); }},
+  ];
+  const panel = document.getElementById('shop-overlay');
+  document.getElementById('shop-gold').textContent = '金币: ' + state.gold;
+  const itemsDiv = document.getElementById('shop-items');
+  itemsDiv.innerHTML = prices.map((p, i) => {
+    const canBuy = state.gold >= p.cost;
+    return '<div class="shop-item ' + (canBuy ? 'buy' : 'nobuy') + '" data-idx="' + i + '" style="' + (canBuy ? 'cursor:pointer' : 'opacity:0.4') + '"><span>' + p.label + '</span><span>' + p.cost + 'g</span></div>';
+  }).join('');
+  itemsDiv.querySelectorAll('.shop-item.buy').forEach(el => {
+    el.addEventListener('click', () => {
+      const i = parseInt(el.dataset.idx);
+      const p = prices[i];
+      if (state.gold >= p.cost) { state.gold -= p.cost; p.action(); openShop(); }
+    });
+  });
+  document.getElementById('btn-shop-close').onclick = () => panel.classList.remove('active');
+  panel.classList.add('active');
+}
+
 function showGameOver() {
   const s = getStats();
   const score = state.monstersKilled * 150 + state.gold * 12 + s.atk * 8 + s.def * 8 + state.hp - state.steps * 5;
@@ -1365,7 +1425,7 @@ function showGameOver() {
     金币: <b>${state.gold}</b> &nbsp; ATK: <b>${s.atk}</b> &nbsp; DEF: <b>${s.def}</b><br>
     <div style="font-size:24px;font-weight:bold;color:var(--accent);margin-top:8px;">评分: ${grade}</div>
   `;
-  document.getElementById('gameover-overlay').classList.add('active');
+  document.getElementById('gameover-overlay').classList.add('active'); gameLogEvent('system', 'GAME OVER - HP=0');
 }
 
 function canWalk(x, y) {
@@ -1426,8 +1486,7 @@ function moveTo(nx, ny) {
 
   // Pickup items
   pickupItems(nx, ny);
-  // Check chests
-
+  { const tik=key(nx,ny); if(itemMeshes[tik]&&itemMeshes[tik].type===ITEM.SHOP) openShop(); }
   // Check stairs
   checkStairs(nx, ny);
 
@@ -1460,9 +1519,9 @@ function pickupItems(x, y) {
     case ITEM.BLUE_GEM:  state.baseDef += 3; msg = '获得蓝宝石！防御力 +3'; break;
     case ITEM.RED_POTION:  state.hp = Math.min(state.hp + 100, state.maxHp); state.maxHp = Math.max(state.maxHp, state.hp); msg = '获得红血瓶！生命 +100'; inventory.push({icon:'🧪',name:'红血瓶+100HP'}); break;
     case ITEM.BLUE_POTION: state.hp = Math.min(state.hp + 500, state.maxHp); state.maxHp = Math.max(state.maxHp, state.hp); msg = '获得蓝血瓶！生命 +500'; inventory.push({icon:'🧪',name:'蓝血瓶+500HP'}); break;
-    case ITEM.YELLOW_KEY: state.yellowKeys++; msg = '获得黄钥匙'; inventory.push({icon:'🔑',name:'黄钥匙'}); break;
-    case ITEM.BLUE_KEY:   state.blueKeys++; msg = '获得蓝钥匙'; inventory.push({icon:'🔑',name:'蓝钥匙'}); break;
-    case ITEM.RED_KEY:    state.redKeys++; msg = '获得红钥匙'; inventory.push({icon:'🔑',name:'红钥匙'}); break;
+    case ITEM.YELLOW_KEY: state.yellowKeys++; msg = '获得黄钥匙'; inventory.push({icon:'🟡',name:'黄钥匙'}); break;
+    case ITEM.BLUE_KEY:   state.blueKeys++; msg = '获得蓝钥匙'; inventory.push({icon:'🔵',name:'蓝钥匙'}); break;
+    case ITEM.RED_KEY:    state.redKeys++; msg = '获得红钥匙'; inventory.push({icon:'🔴',name:'红钥匙'}); break;
     case ITEM.TREASURE:
       if (info.equipId && EQUIPMENT[info.equipId]) {
         state.equipInv.push(info.equipId);
@@ -1472,7 +1531,7 @@ function pickupItems(x, y) {
       break;
   }
 
-  pickedItems.add(fk(x, y));
+  pickedItems.add(fk(x, y)); gameLogEvent('item', `pickup ${itype} @ (${x},${y}) F${state.floor}`);
 
   // Remove item from scene
   const mesh = info.mesh;
@@ -1542,6 +1601,7 @@ function goToFloor(newFloor) {
 
   buildFloor();
   showMessage(`${wasGoingUp ? '⬆' : '⬇'} 进入第 ${newFloor + 1} 层`, false);
+  gameLogEvent('floor', `${wasGoingUp ? 'UP' : 'DOWN'} to F${newFloor+1} @ (${state.px},${state.py})`);
 }
 
 function animateMove(nx, ny) {
@@ -1766,6 +1826,7 @@ const keys = {};
 window.addEventListener('keydown', e => {
   keys[e.key] = true;
   document.getElementById('game-status').textContent = '⌨️ ' + e.key;
+  if (e.key === 'b' || e.key === 'B') { openShop(); return; }
   handleInput();
 });
 window.addEventListener('keyup', e => { keys[e.key] = false; });
@@ -2005,7 +2066,7 @@ function createRNG(seed){let s=hashStr(String(seed));return function(){s|=0;s=s+
 function ensurePath(map,sx,sy,ex,ey,rng){const v=Array.from({length:11},()=>Array(11).fill(false));const q=[[sx,sy]];v[sy][sx]=true;while(q.length){const[cx,cy]=q.shift();for(const[dx,dy]of[[0,-1],[0,1],[-1,0],[1,0]]){const nx=cx+dx,ny=cy+dy;if(nx<0||nx>=11||ny<0||ny>=11||v[ny][nx])continue;if(map[ny][nx]===1)continue;v[ny][nx]=true;q.push([nx,ny]);}}if(!v[ey][ex]){let cx=sx,cy=sy;for(let s=0;s<100&&!(cx===ex&&cy===ey);s++){const dx=Math.sign(ex-cx),dy=Math.sign(ey-cy);let m=false;for(const[ddx,ddy]of[[dx,0],[0,dy],[dx,dy]]){const nx=cx+ddx,ny=cy+ddy;if(nx>=1&&nx<10&&ny>=1&&ny<10){if(map[ny][nx]>=1&&map[ny][nx]<=4){map[ny][nx]=0;m=true;cx=nx;cy=ny;break;}if(ddx||ddy){cx=nx;cy=ny;m=true;break;}}}if(!m)break;}}}
 function placeDoors(map,rng,fn){const n=2+Math.floor(rng()*3);for(let i=0;i<n;i++){const c=[];for(let y=2;y<9;y++)for(let x=2;x<9;x++){if(map[y][x]!==0)continue;const nW=map[y-1][x]===1,sW=map[y+1][x]===1,eW=map[y][x+1]===1,wW=map[y][x-1]===1;if((nW&&sW&&!eW&&!wW)||(eW&&wW&&!nW&&!sW))c.push([x,y]);}if(!c.length)break;const[dx,dy]=c[Math.floor(rng()*c.length)];const dt=fn>=3?(rng()<0.4?4:rng()<0.5?3:2):fn>=1?(rng()<0.5?3:2):2;map[dy][dx]=dt;}}
 function divideMaze(map,x1,y1,x2,y2,rng){const w=x2-x1;const h=y2-y1;if(w<2||h<2)return;let horizontal;if(w>h*1.5)horizontal=true;else if(h>w*1.5)horizontal=false;else horizontal=rng()<0.5;if(horizontal){let wallY=y1+1+Math.floor(rng()*(y2-y1-1));if(wallY<=y1)wallY=y1+1;if(wallY>=y2)wallY=y2-1;const gapX=x1+Math.floor(rng()*(x2-x1+1));for(let x=x1;x<=x2;x++){if(x!==gapX)map[wallY][x]=1;}if(rng()<0.25){const g2=x1+Math.floor(rng()*(x2-x1+1));if(g2!==gapX)map[wallY][g2]=0;}divideMaze(map,x1,y1,x2,wallY-1,rng);divideMaze(map,x1,wallY+1,x2,y2,rng);}else{let wallX=x1+1+Math.floor(rng()*(x2-x1-1));if(wallX<=x1)wallX=x1+1;if(wallX>=x2)wallX=x2-1;const gapY=y1+Math.floor(rng()*(y2-y1+1));for(let y=y1;y<=y2;y++){if(y!==gapY)map[y][wallX]=1;}if(rng()<0.25){const g2=y1+Math.floor(rng()*(y2-y1+1));if(g2!==gapY)map[g2][wallX]=0;}divideMaze(map,x1,y1,wallX-1,y2,rng);divideMaze(map,wallX+1,y1,x2,y2,rng);}}
-function generateAllMaps(seed){const rng=createRNG(seed);const maps=[],mons=[],its=[],hws=[];for(let f=0;f<5;f++){const map=Array.from({length:11},()=>Array(11).fill(0));for(let i=0;i<11;i++)map[0][i]=map[10][i]=map[i][0]=map[i][10]=1;divideMaze(map,1,1,9,9,rng);map[9][5]=0;for(const[dxx,dyy]of[[0,-1],[0,1],[-1,0],[1,0]]){const ax=5+dxx,ay=9+dyy;if(ax>=1&&ax<10&&ay>=1&&ay<10)map[ay][ax]=0;}const cand=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0&&!(x===5&&y===9))cand.push([x,y]);cand.sort((a,b)=>(Math.abs(b[0]-5)+Math.abs(b[1]-9))-(Math.abs(a[0]-5)+Math.abs(a[1]-9)));const[sx,sy]=cand.length?cand[Math.floor(rng()*Math.min(5,cand.length))]:[4,8];map[sy][sx]=9;ensurePath(map,5,9,sx,sy,rng);for(const[dxx,dyy]of[[0,-1],[0,1],[-1,0],[1,0]]){const ax=sx+dxx,ay=sy+dyy;if(ax>=1&&ax<10&&ay>=1&&ay<10)map[ay][ax]=0;}placeDoors(map,rng,f);if(f>=1&&f<=3){const dt=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0&&!(x===sx&&y===sy))dt.push([x,y]);if(dt.length){const[dx,dy]=dt[Math.floor(rng()*dt.length)];map[dy][dx]=8;for(const[ddx,ddy]of[[0,-1],[0,1],[-1,0],[1,0]]){const ax=dx+ddx,ay=dy+ddy;if(ax>=1&&ax<10&&ay>=1&&ay<10)map[ay][ax]=0;}}}if(f===4){const dt=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0)dt.push([x,y]);if(dt.length){const[dx,dy]=dt[Math.floor(rng()*dt.length)];map[dy][dx]=8;for(const[ddx,ddy]of[[0,-1],[0,1],[-1,0],[1,0]]){const ax=dx+ddx,ay=dy+ddy;if(ax>=1&&ax<10&&ay>=1&&ay<10)map[ay][ax]=0;}}}const wl=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0)wl.push([x,y]);const pool=wl.filter(([x,y])=>!(x===5&&y===9)&&!(x===sx&&y===sy));const mc=3+f*2;const ms=[];const mt=f===4?[4,5,6,7]:f>=2?[2,3,4,5]:f>=1?[1,2,3,4]:[1,2];const mpool=[...pool];for(let i=0;i<mc&&mpool.length;i++){const idx=Math.floor(rng()*mpool.length);const[mx,my]=mpool.splice(idx,1)[0];ms.push([mt[Math.floor(rng()*mt.length)],mx,my]);}const id=[['rg','rp','yk','yk','bk'],['bg','rg','rp','bp','yk','yk','yk','bk'],['rg','rg','bg','bg','rp','rp','bp','yk','yk','yk','bk','rk'],['rg','rg','bg','bg','rp','rp','bp','bp','yk','yk','yk','yk','bk','bk','rk'],['rg','rg','rg','bg','bg','bg','rp','rp','rp','bp','bp','yk','yk','yk','bk','rk']];const items=[];const defs=id[Math.min(f,4)];const ipool=[...wl].filter(([x,y])=>!(x===5&&y===9)&&!(x===sx&&y===sy));for(let i=0;i<defs.length&&ipool.length;i++){const idx=Math.floor(rng()*ipool.length);const[ix,iy]=ipool.splice(idx,1)[0];items.push([defs[i],ix,iy]);}if(rng()<0.6){const wt=[];for(let y=2;y<9;y++)for(let x=2;x<9;x++)if(map[y][x]===1)wt.push([x,y]);if(wt.length){const[wx,wy]=wt[Math.floor(rng()*wt.length)];hws.push([f,wx,wy]);}}const ec=f===4?2:Math.floor(rng()*2);const eqKeys=Object.keys(EQUIPMENT);for(let i=0;i<ec;i++){const eqId=eqKeys[Math.floor(rng()*eqKeys.length)];const cp=pool.splice(Math.floor(rng()*pool.length),1);if(cp&&cp.length)items.push(['tr',eqId,cp[0],cp[1]]);}maps.push(map);mons.push(ms);its.push(items);}for(let f=0;f<4;f++){let ux=-1,uy=-1;for(let y=0;y<11;y++)for(let x=0;x<11;x++)if(maps[f][y][x]===9){ux=x;uy=y;break;}for(let y=0;y<11;y++)for(let x=0;x<11;x++)if(maps[f+1][y][x]===8){maps[f+1][y][x]=0;break;}if(ux>=0){maps[f+1][uy][ux]=0;maps[f+1][uy][ux]=8;}}for(let f=0;f<5;f++){let fsx=-1,fsy=-1;for(let y=0;y<11;y++)for(let x=0;x<11;x++)if(maps[f][y][x]===9){fsx=x;fsy=y;break;}if(fsx<0){for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(maps[f][y][x]===0){maps[f][y][x]=9;fsx=x;fsy=y;break;}}if(fsx<0&&maps[f][9][4]===0)maps[f][9][4]=9;}return{maps,monsters:mons,items:its,hiddenWalls:hws};}
+function generateAllMaps(seed){const rng=createRNG(seed);const maps=[],mons=[],its=[],hws=[];for(let f=0;f<5;f++){const map=Array.from({length:11},()=>Array(11).fill(0));for(let i=0;i<11;i++)map[0][i]=map[10][i]=map[i][0]=map[i][10]=1;divideMaze(map,1,1,9,9,rng);map[9][5]=0;for(const[dxx,dyy]of[[0,-1],[0,1],[-1,0],[1,0]]){const ax=5+dxx,ay=9+dyy;if(ax>=1&&ax<10&&ay>=1&&ay<10)map[ay][ax]=0;}const cand=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0&&!(x===5&&y===9))cand.push([x,y]);cand.sort((a,b)=>(Math.abs(b[0]-5)+Math.abs(b[1]-9))-(Math.abs(a[0]-5)+Math.abs(a[1]-9)));const[sx,sy]=cand.length?cand[Math.floor(rng()*Math.min(5,cand.length))]:[4,8];map[sy][sx]=9;ensurePath(map,5,9,sx,sy,rng);for(const[dxx,dyy]of[[0,-1],[0,1],[-1,0],[1,0]]){const ax=sx+dxx,ay=sy+dyy;if(ax>=1&&ax<10&&ay>=1&&ay<10)map[ay][ax]=0;}placeDoors(map,rng,f);if(f>=1&&f<=3){const dt=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0&&!(x===sx&&y===sy))dt.push([x,y]);if(dt.length){const[dx,dy]=dt[Math.floor(rng()*dt.length)];map[dy][dx]=8;for(const[ddx,ddy]of[[0,-1],[0,1],[-1,0],[1,0]]){const ax=dx+ddx,ay=dy+ddy;if(ax>=1&&ax<10&&ay>=1&&ay<10)map[ay][ax]=0;}}}const wl=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0)wl.push([x,y]);const pool=wl.filter(([x,y])=>!(x===5&&y===9)&&!(x===sx&&y===sy));const mc=3+f*2;const ms=[];const mt=f===4?[4,5,6,7]:f>=2?[2,3,4,5]:f>=1?[1,2,3,4]:[1,2];const mpool=[...pool];for(let i=0;i<mc&&mpool.length;i++){const idx=Math.floor(rng()*mpool.length);const[mx,my]=mpool.splice(idx,1)[0];ms.push([mt[Math.floor(rng()*mt.length)],mx,my]);}const id=[['rg','rp','yk','yk','bk'],['bg','rg','rp','bp','yk','yk','yk','bk'],['rg','rg','bg','bg','rp','rp','bp','yk','yk','yk','bk','rk'],['rg','rg','bg','bg','rp','rp','bp','bp','yk','yk','yk','yk','bk','bk','rk'],['rg','rg','rg','bg','bg','bg','rp','rp','rp','bp','bp','yk','yk','yk','bk','rk']];const items=[];const defs=id[Math.min(f,4)];const ipool=[...wl].filter(([x,y])=>!(x===5&&y===9)&&!(x===sx&&y===sy));for(let i=0;i<defs.length&&ipool.length;i++){const idx=Math.floor(rng()*ipool.length);const[ix,iy]=ipool.splice(idx,1)[0];items.push([defs[i],ix,iy]);}if(f>=1&&f<=3&&pool.length){const sp=pool[pool.length-1];items.push(['sh',sp[0],sp[1]]);pool.pop();}if(rng()<0.6){const wt=[];for(let y=2;y<9;y++)for(let x=2;x<9;x++)if(map[y][x]===1)wt.push([x,y]);if(wt.length){const[wx,wy]=wt[Math.floor(rng()*wt.length)];hws.push([f,wx,wy]);}}const ec=f===4?2:Math.floor(rng()*2);const eqKeys=Object.keys(EQUIPMENT);for(let i=0;i<ec;i++){const eqId=eqKeys[Math.floor(rng()*eqKeys.length)];const cp=pool.splice(Math.floor(rng()*pool.length),1);if(cp&&cp.length)items.push(['tr',eqId,cp[0],cp[1]]);}if(f===4){const bi=ms.findIndex(m=>m[0]===7);if(bi>=0){const bx=ms[bi][1],by=ms[bi][2];if(Math.abs(bx-sx)+Math.abs(by-sy)<4){const pool2=wl.filter(([x,y])=>!(x===sx&&y===sy)&&Math.abs(x-sx)+Math.abs(y-sy)>=4&&!ms.some(m2=>m2[1]===x&&m2[2]===y));if(pool2.length){const[nx,ny]=pool2[Math.floor(rng()*pool2.length)];ms[bi][1]=nx;ms[bi][2]=ny;}}}}maps.push(map);mons.push(ms);its.push(items);}for(let f=0;f<4;f++){let ux=-1,uy=-1;for(let y=0;y<11;y++)for(let x=0;x<11;x++)if(maps[f][y][x]===9){ux=x;uy=y;break;}for(let y=0;y<11;y++)for(let x=0;x<11;x++)if(maps[f+1][y][x]===8){maps[f+1][y][x]=0;break;}if(ux>=0){maps[f+1][uy][ux]=0;maps[f+1][uy][ux]=8;}}for(let f=0;f<4;f++){let fsx=-1,fsy=-1;for(let y=0;y<11;y++)for(let x=0;x<11;x++)if(maps[f][y][x]===9){fsx=x;fsy=y;break;}if(fsx<0){for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(maps[f][y][x]===0){maps[f][y][x]=9;fsx=x;fsy=y;break;}}if(fsx<0&&maps[f][9][4]===0)maps[f][9][4]=9;}return{maps,monsters:mons,items:its,hiddenWalls:hws};}
 
 // Click equipped slot to unequip
 document.addEventListener('click', (e) => {
@@ -2121,6 +2182,14 @@ document.addEventListener('keydown', (e) => {
     state.weapon = null; state.shield = null; state.armor = null; state.equipInv = [];
     defeatedThisFloor = new Set();
     pickedItems = new Set();
+let gameLog = [];
+function gameLogEvent(cat, msg) {
+  const ts = Date.now();
+  gameLog.push({ts, cat, msg});
+  if (gameLog.length > 500) gameLog.shift();
+  console.debug(`[${cat}]`, msg);
+}
+
     inventory.length = 0; history.length = 0;
     buildFloor();
     updateHUD();
