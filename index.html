@@ -414,7 +414,7 @@ function getStats() {
 const ITEM = {
   RED_GEM: 'rg', BLUE_GEM: 'bg', RED_POTION: 'rp', BLUE_POTION: 'bp',
   YELLOW_KEY: 'yk', BLUE_KEY: 'bk', RED_KEY: 'rk',
-  TREASURE: 'tr', SHOP: 'sh',
+  TREASURE: 'tr', EQ_SHOP: 'eq', KEY_SHOP: 'ky',
 };
 
 
@@ -1208,6 +1208,8 @@ function calcBattlePreview(monsterType) {
   const avgPDmg = pDmg * (1 + s.critRate * (s.critDmg - 1)) * (1 - s.missChance);
   const avgRounds = Math.ceil(m.hp / Math.max(1, avgPDmg));
   const estLoss = Math.round(avgRounds * mDmg * (1 - s.enemyMissChance));
+  let maxHpBonus = 0;
+  if (state.armor && state.armor.maxHp !== undefined) maxHpBonus += state.armor.maxHp;
   return { monster: m, estLoss, canWin: estLoss < state.hp, s };
 }
 
@@ -1291,7 +1293,9 @@ function doBattle(mx, my) {
     }
     if (state.hp <= 0) { document.getElementById('monster-info').style.display='none'; showGameOver(); }
   } else {
-    gameLogEvent('battle', `vs ${m.name} HP${m.hp} ATK${m.atk} DEF${m.def} F${state.floor}`); animateBattleLog(log, info.mesh, m.hp, m.name, () => {
+    gameLogEvent('battle', `vs ${m.name} HP${m.hp} ATK${m.atk} DEF${m.def} F${state.floor}`);
+  showMonsterInfo(m);
+  animateBattleLog(log, info.mesh, m.hp, m.name, () => {
       document.getElementById('monster-info').style.display='none'; defeatedThisFloor.add(fk(mx, my));
       delete monsterMeshes[key(mx, my)];
       dynGroup.remove(info.mesh);
@@ -1337,7 +1341,11 @@ function animateBattleLog(log, monsterMesh, mHp, mName, onDone) {
     if (e.actor==='player') {
       if (e.type==='miss') { text='MISS'; color='#888'; }
       else if (e.type==='crit') { text='💥'+e.dmg; color='#ff0'; }
-      else if (e.type==='stun') { text='⚡眩晕'; color='#8af'; }
+      else if (e.type==='stun') { text='⚡眩晕'; color='#8af';
+      const stEl=document.getElementById('stun-status');
+      stEl.style.display='inline'; stEl.textContent='⚡怪物眩晕';
+      setTimeout(()=>stEl.style.display='none',400);
+    }
       else { text='-'+e.dmg; color='#fff'; curMHp = Math.max(0, curMHp - (e.dmg||0)); }
       updateMonsterHPDisplay(curMHp, mName, mHp);
     } else {
@@ -1387,18 +1395,49 @@ function updateMonsterLabels() {
 }
 
 
-function openShop() {
-  const s = getStats();
-  const prices = [
-    {label:'❤️ +100HP 血瓶', cost:25, action(){ state.hp=Math.min(state.hp+100,state.maxHp); state.maxHp=Math.max(state.maxHp,state.hp); showMessage('购买: +100HP',false); updateHUD(); }},
-    {label:'❤️ +500HP 大血瓶', cost:100, action(){ state.hp=Math.min(state.hp+500,state.maxHp); state.maxHp=Math.max(state.maxHp,state.hp); showMessage('购买: +500HP',false); updateHUD(); }},
-    {label:'🟡 黄钥匙', cost:15, action(){ state.yellowKeys++; inventory.push({icon:'🟡',name:'黄钥匙'}); showMessage('购买: 黄钥匙',false); updateHUD(); }},
-    {label:'🔵 蓝钥匙', cost:40, action(){ state.blueKeys++; inventory.push({icon:'🔵',name:'蓝钥匙'}); showMessage('购买: 蓝钥匙',false); updateHUD(); }},
-    {label:'⚔️ 攻击+1', cost:50, action(){ state.baseAtk+=1; showMessage('购买: ATK+1',false); updateHUD(); }},
-    {label:'🛡️ 防御+1', cost:50, action(){ state.baseDef+=1; showMessage('购买: DEF+1',false); updateHUD(); }},
-  ];
+function openKeyShop() {
   const panel = document.getElementById('shop-overlay');
   document.getElementById('shop-gold').textContent = '金币: ' + state.gold;
+  const prices = [
+    {label:'🟡 黄钥匙', cost:12, action(){ state.yellowKeys++; inventory.push({icon:'🟡',name:'黄钥匙'}); showMessage('购买: 黄钥匙',false); updateHUD(); }},
+    {label:'🔵 蓝钥匙', cost:30, action(){ state.blueKeys++; inventory.push({icon:'🔵',name:'蓝钥匙'}); showMessage('购买: 蓝钥匙',false); updateHUD(); }},
+    {label:'🔴 红钥匙', cost:70, action(){ state.redKeys++; inventory.push({icon:'🔴',name:'红钥匙'}); showMessage('购买: 红钥匙',false); updateHUD(); }},
+  ];
+  renderShopItems(panel, prices);
+}
+function openEqShop() {
+  const panel = document.getElementById('shop-overlay');
+  document.getElementById('shop-gold').textContent = '金币: ' + state.gold;
+  const prices = [
+    {label:'❤️ +200HP 血瓶', cost:30, action(){ state.hp=Math.min(state.hp+200,state.maxHp); state.maxHp=Math.max(state.maxHp,state.hp); showMessage('购买: +200HP',false); updateHUD(); }},
+    {label:'⚔️ ATK+2', cost:60, action(){ state.baseAtk+=2; showMessage('购买: ATK+2',false); updateHUD(); }},
+    {label:'🛡️ DEF+2', cost:60, action(){ state.baseDef+=2; showMessage('购买: DEF+2',false); updateHUD(); }},
+    {label:'🗡️ 轻型武器(随机)', cost:120, action(){ equipRandomWeapon('light'); }},
+    {label:'⚔️ 重型武器(随机)', cost:120, action(){ equipRandomWeapon('heavy'); }},
+    {label:'🧥 护甲(随机)', cost:100, action(){ equipRandomArmor(); }},
+  ];
+  renderShopItems(panel, prices);
+}
+function equipRandomWeapon(type) {
+  const weapons = Object.entries(EQUIPMENT).filter(([k,v])=>v.slot==='weapon');
+  const filtered = weapons.filter(([k,v])=>type==='light'?v.atkSpeed>0:v.atkSpeed<0);
+  if(!filtered.length){ showMessage('无库存',false); return; }
+  const [id, eq] = filtered[Math.floor(Math.random()*filtered.length)];
+  state.equipInv.push(id);
+  inventory.push({icon:eq.icon, name:eq.name});
+  showMessage('获得: '+eq.icon+' '+eq.name, false);
+  updateHUD();
+}
+function equipRandomArmor() {
+  const armors = Object.entries(EQUIPMENT).filter(([k,v])=>v.slot==='armor');
+  if(!armors.length){ showMessage('无库存',false); return; }
+  const [id, eq] = armors[Math.floor(Math.random()*armors.length)];
+  state.equipInv.push(id);
+  inventory.push({icon:eq.icon, name:eq.name});
+  showMessage('获得: '+eq.icon+' '+eq.name, false);
+  updateHUD();
+}
+function renderShopItems(panel, prices) {
   const itemsDiv = document.getElementById('shop-items');
   itemsDiv.innerHTML = prices.map((p, i) => {
     const canBuy = state.gold >= p.cost;
@@ -1408,13 +1447,24 @@ function openShop() {
     el.addEventListener('click', () => {
       const i = parseInt(el.dataset.idx);
       const p = prices[i];
-      if (state.gold >= p.cost) { state.gold -= p.cost; p.action(); openShop(); }
+      if (state.gold >= p.cost) { state.gold -= p.cost; p.action(); renderShopItems(panel, prices); }
     });
   });
   document.getElementById('btn-shop-close').onclick = () => panel.classList.remove('active');
   panel.classList.add('active');
 }
+function openShop() { openEqShop(); }
 
+function showMonsterInfo(m) {
+  const panel = document.getElementById('monster-info');
+  if (!panel) return;
+  panel.style.display = 'block';
+  panel.innerHTML = '<div class="section-title">⚔️ ' + m.name + '</div>' +
+    '<div style="font-size:11px;line-height:1.6;color:#a6adc8;">' +
+    '❤️ HP ' + m.hp + ' &nbsp; ⚔️ ATK ' + m.atk + ' &nbsp; 🛡️ DEF ' + m.def + '<br>' +
+    '⏱ 攻速 ' + (m.atkSpeed||1).toFixed(2) + ' &nbsp; 💥 暴击 ' + Math.round((m.critRate||0)*100) + '%' +
+    '</div>';
+}
 function updateMonsterHPDisplay(cur, name, max) {
   const panel = document.getElementById('monster-info');
   if (!panel) return;
@@ -1495,7 +1545,8 @@ function moveTo(nx, ny) {
 
   // Pickup items
   pickupItems(nx, ny);
-  { const tik=key(nx,ny); if(itemMeshes[tik]&&itemMeshes[tik].type===ITEM.SHOP) openShop(); }
+  { const tik=key(nx,ny); if(itemMeshes[tik]&&itemMeshes[tik].type===ITEM.EQ_SHOP) openEqShop();
+  if(itemMeshes[tik]&&itemMeshes[tik].type===ITEM.KEY_SHOP) openKeyShop(); }
   // Check stairs
   checkStairs(nx, ny);
 
@@ -1527,7 +1578,7 @@ function pickupItems(x, y) {
     case ITEM.RED_GEM:   state.baseAtk += 3; msg = '获得红宝石！攻击力 +3'; break;
     case ITEM.BLUE_GEM:  state.baseDef += 3; msg = '获得蓝宝石！防御力 +3'; break;
     case ITEM.RED_POTION:  state.hp = Math.min(state.hp + 100, state.maxHp); state.maxHp = Math.max(state.maxHp, state.hp); msg = '获得红血瓶！生命 +100'; break;
-    case ITEM.BLUE_POTION: state.hp = Math.min(state.hp + 500, state.maxHp); state.maxHp = Math.max(state.maxHp, state.hp); msg = '获得蓝血瓶！生命 +500'; break;
+    case ITEM.BLUE_POTION: state.hp = Math.min(state.hp + 200, state.maxHp); state.maxHp = Math.max(state.maxHp, state.hp); msg = '获得蓝血瓶！生命 +200'; break;
     case ITEM.YELLOW_KEY: state.yellowKeys++; msg = '获得黄钥匙'; inventory.push({icon:'🟡',name:'黄钥匙'}); break;
     case ITEM.BLUE_KEY:   state.blueKeys++; msg = '获得蓝钥匙'; inventory.push({icon:'🔵',name:'蓝钥匙'}); break;
     case ITEM.RED_KEY:    state.redKeys++; msg = '获得红钥匙'; inventory.push({icon:'🔴',name:'红钥匙'}); break;
@@ -2075,7 +2126,7 @@ function createRNG(seed){let s=hashStr(String(seed));return function(){s|=0;s=s+
 function ensurePath(map,sx,sy,ex,ey,rng){const v=Array.from({length:11},()=>Array(11).fill(false));const q=[[sx,sy]];v[sy][sx]=true;while(q.length){const[cx,cy]=q.shift();for(const[dx,dy]of[[0,-1],[0,1],[-1,0],[1,0]]){const nx=cx+dx,ny=cy+dy;if(nx<0||nx>=11||ny<0||ny>=11||v[ny][nx])continue;if(map[ny][nx]===1)continue;v[ny][nx]=true;q.push([nx,ny]);}}if(!v[ey][ex]){let cx=sx,cy=sy;for(let s=0;s<100&&!(cx===ex&&cy===ey);s++){const dx=Math.sign(ex-cx),dy=Math.sign(ey-cy);let m=false;for(const[ddx,ddy]of[[dx,0],[0,dy],[dx,dy]]){const nx=cx+ddx,ny=cy+ddy;if(nx>=1&&nx<10&&ny>=1&&ny<10){if(map[ny][nx]>=1&&map[ny][nx]<=4){map[ny][nx]=0;m=true;cx=nx;cy=ny;break;}if(ddx||ddy){cx=nx;cy=ny;m=true;break;}}}if(!m)break;}}}
 function placeDoors(map,rng,fn){const n=2+Math.floor(rng()*3);for(let i=0;i<n;i++){const c=[];for(let y=2;y<9;y++)for(let x=2;x<9;x++){if(map[y][x]!==0)continue;const nW=map[y-1][x]===1,sW=map[y+1][x]===1,eW=map[y][x+1]===1,wW=map[y][x-1]===1;if((nW&&sW&&!eW&&!wW)||(eW&&wW&&!nW&&!sW))c.push([x,y]);}if(!c.length)break;const[dx,dy]=c[Math.floor(rng()*c.length)];const dt=fn>=3?(rng()<0.4?4:rng()<0.5?3:2):fn>=1?(rng()<0.5?3:2):2;map[dy][dx]=dt;}}
 function divideMaze(map,x1,y1,x2,y2,rng){const w=x2-x1;const h=y2-y1;if(w<2||h<2)return;let horizontal;if(w>h*1.5)horizontal=true;else if(h>w*1.5)horizontal=false;else horizontal=rng()<0.5;if(horizontal){let wallY=y1+1+Math.floor(rng()*(y2-y1-1));if(wallY<=y1)wallY=y1+1;if(wallY>=y2)wallY=y2-1;const gapX=x1+Math.floor(rng()*(x2-x1+1));for(let x=x1;x<=x2;x++){if(x!==gapX)map[wallY][x]=1;}if(rng()<0.25){const g2=x1+Math.floor(rng()*(x2-x1+1));if(g2!==gapX)map[wallY][g2]=0;}divideMaze(map,x1,y1,x2,wallY-1,rng);divideMaze(map,x1,wallY+1,x2,y2,rng);}else{let wallX=x1+1+Math.floor(rng()*(x2-x1-1));if(wallX<=x1)wallX=x1+1;if(wallX>=x2)wallX=x2-1;const gapY=y1+Math.floor(rng()*(y2-y1+1));for(let y=y1;y<=y2;y++){if(y!==gapY)map[y][wallX]=1;}if(rng()<0.25){const g2=y1+Math.floor(rng()*(y2-y1+1));if(g2!==gapY)map[g2][wallX]=0;}divideMaze(map,x1,y1,wallX-1,y2,rng);divideMaze(map,wallX+1,y1,x2,y2,rng);}}
-function generateAllMaps(seed){const rng=createRNG(seed);const maps=[],mons=[],its=[],hws=[];for(let f=0;f<5;f++){const map=Array.from({length:11},()=>Array(11).fill(0));for(let i=0;i<11;i++)map[0][i]=map[10][i]=map[i][0]=map[i][10]=1;divideMaze(map,1,1,9,9,rng);map[9][5]=0;for(const[dxx,dyy]of[[0,-1],[0,1],[-1,0],[1,0]]){const ax=5+dxx,ay=9+dyy;if(ax>=1&&ax<10&&ay>=1&&ay<10)map[ay][ax]=0;}const cand=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0&&!(x===5&&y===9))cand.push([x,y]);cand.sort((a,b)=>(Math.abs(b[0]-5)+Math.abs(b[1]-9))-(Math.abs(a[0]-5)+Math.abs(a[1]-9)));const[sx,sy]=cand.length?cand[Math.floor(rng()*Math.min(5,cand.length))]:[4,8];if(f!==4)map[sy][sx]=9;ensurePath(map,5,9,sx,sy,rng);if(f!==4)for(const[dxx,dyy]of[[0,-1],[0,1],[-1,0],[1,0]]){const ax=sx+dxx,ay=sy+dyy;if(ax>=1&&ax<10&&ay>=1&&ay<10)map[ay][ax]=0;}placeDoors(map,rng,f);if(f>=1&&f<=3){const dt=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0&&!(x===sx&&y===sy))dt.push([x,y]);if(dt.length){const[dx,dy]=dt[Math.floor(rng()*dt.length)];map[dy][dx]=8;for(const[ddx,ddy]of[[0,-1],[0,1],[-1,0],[1,0]]){const ax=dx+ddx,ay=dy+ddy;if(ax>=1&&ax<10&&ay>=1&&ay<10)map[ay][ax]=0;}}else{const fw=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0)fw.push([x,y]);if(fw.length){const[dx,dy]=fw[Math.floor(rng()*fw.length)];map[dy][dx]=8;for(const[ddx,ddy]of[[0,-1],[0,1],[-1,0],[1,0]]){const ax=dx+ddx,ay=dy+ddy;if(ax>=1&&ax<10&&ay>=1&&ay<10)map[ay][ax]=0;}}}}const wl=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0)wl.push([x,y]);const pool=wl.filter(([x,y])=>!(x===5&&y===9)&&!(x===sx&&y===sy));const mc=3+f*2;const ms=[];const mt=f===4?[4,5,6,7]:f>=2?[2,3,4,5]:f>=1?[1,2,3,4]:[1,2];const mpool=[...pool];for(let i=0;i<mc&&mpool.length;i++){const idx=Math.floor(rng()*mpool.length);const[mx,my]=mpool.splice(idx,1)[0];ms.push([mt[Math.floor(rng()*mt.length)],mx,my]);}if(f===4){const bi=ms.findIndex(m=>m[0]===7);if(bi>=0){const bx=ms[bi][1],by=ms[bi][2];if(Math.abs(bx-sx)+Math.abs(by-sy)<4){const pool2=wl.filter(([x,y])=>!(x===sx&&y===sy)&&Math.abs(x-sx)+Math.abs(y-sy)>=4&&!ms.some(m2=>m2[1]===x&&m2[2]===y));if(pool2.length){const[nx,ny]=pool2[Math.floor(rng()*pool2.length)];ms[bi][1]=nx;ms[bi][2]=ny;}}}}const id=[['rg','rp','yk','yk','bk'],['bg','rg','rp','bp','yk','yk','yk','bk'],['rg','rg','bg','bg','rp','rp','bp','yk','yk','yk','bk','rk'],['rg','rg','bg','bg','rp','rp','bp','bp','yk','yk','yk','yk','bk','bk','rk'],['rg','rg','rg','bg','bg','bg','rp','rp','rp','bp','bp','yk','yk','yk','bk','rk']];const items=[];const defs=id[Math.min(f,4)];const ipool=[...pool];for(const[mtp,mx,my]of ms){const mi=ipool.findIndex(([x,y])=>x===mx&&y===my);if(mi>=0)ipool.splice(mi,1);}for(let i=0;i<defs.length&&ipool.length;i++){const idx=Math.floor(rng()*ipool.length);const[ix,iy]=ipool.splice(idx,1)[0];items.push([defs[i],ix,iy]);}if(f>=1&&f<=3&&ipool.length>0){const sp2=ipool[ipool.length-1];items.push(['sh',sp2[0],sp2[1]]);ipool.pop();}if(rng()<0.6){const wt=[];for(let y=2;y<9;y++)for(let x=2;x<9;x++)if(map[y][x]===1)wt.push([x,y]);if(wt.length){const[wx,wy]=wt[Math.floor(rng()*wt.length)];hws.push([f,wx,wy]);}}const ec=f===4?2:Math.floor(rng()*2);const eqKeys=Object.keys(EQUIPMENT);for(let i=0;i<ec;i++){const eqId=eqKeys[Math.floor(rng()*eqKeys.length)];const rp=[...ipool];const cp=rp[Math.floor(rng()*rp.length)];if(cp){items.push(['tr',eqId,cp[0],cp[1]]);ipool.splice(ipool.findIndex(([x,y])=>x===cp[0]&&y===cp[1]),1);}}maps.push(map);mons.push(ms);its.push(items);}for(let f=0;f<3;f++){let ux=-1,uy=-1;for(let y=0;y<11;y++)for(let x=0;x<11;x++)if(maps[f][y][x]===9){ux=x;uy=y;break;}for(let y=0;y<11;y++)for(let x=0;x<11;x++)if(maps[f+1][y][x]===8){maps[f+1][y][x]=0;break;}if(ux>=0){maps[f+1][uy][ux]=0;maps[f+1][uy][ux]=8;}}for(let f=1;f<=3;f++){let dfound=false;for(let y=0;y<11;y++)for(let x=0;x<11;x++)if(maps[f][y][x]===8)dfound=true;if(!dfound){for(let y=2;y<9;y++){let placed=false;for(let x=2;x<9;x++){if(maps[f][y][x]===0){maps[f][y][x]=8;placed=true;break;}}if(placed)break;}}}for(let f=0;f<4;f++){let fsx=-1,fsy=-1;for(let y=0;y<11;y++)for(let x=0;x<11;x++)if(maps[f][y][x]===9){fsx=x;fsy=y;break;}if(fsx<0){for(let y=1;y<10;y++){let found=false;for(let x=1;x<10;x++)if(maps[f][y][x]===0){maps[f][y][x]=9;fsx=x;fsy=y;found=true;break;}if(found)break;}}if(fsx<0&&maps[f][9][4]===0)maps[f][9][4]=9;}const hasShop=its.some(itf=>itf.some(it=>it[0]==='sh'));if(!hasShop){for(let f=1;f<=3;f++){for(let y=2;y<9;y++){let placed=false;for(let x=2;x<9;x++){if(maps[f][y][x]===0){its[f].push(['sh',x,y]);placed=true;break;}}if(placed)break;}}}for(let lf=0;lf<5;lf++){let lups=-1,lupsy=-1,ldns=-1,ldnsy=-1,dmc=0,ic=0;for(let y=0;y<11;y++)for(let x=0;x<11;x++){const t=maps[lf][y][x];if(t===9){lups=x;lupsy=y;}if(t===8){ldns=x;ldnsy=y;}}for(let y=0;y<11;y++)for(let x=0;x<11;x++){if(maps[lf][y][x]>=2&&maps[lf][y][x]<=4)dmc++;}ic=its[lf].length;console.debug(`[gen] F${lf+1} up(${lups},${lupsy}) dn(${ldns},${ldnsy}) doors:${dmc} items:${ic} mons:${mons[lf].length}`);gameLogEvent('gen', `F${lf+1} UP(${lups},${lupsy}) DN(${ldns},${ldnsy}) mons:[${mons[lf].map(m=>'('+m[0]+'@'+m[1]+','+m[2]+')').join(',')}] items:[${its[lf].map(it=>it[0]+'@('+it[it.length-2]+','+it[it.length-1]+')').join(',')}]`);}for(let ff=0;ff<5;ff++){mons[ff]=mons[ff].filter(m=>{const mx=m[1],my=m[2];return maps[ff][my][mx]===0;});its[ff]=its[ff].filter(it=>{const ix=it[it.length-2],iy=it[it.length-1];return maps[ff][iy][ix]===0||it[0]==='sh';});}return{maps,monsters:mons,items:its,hiddenWalls:hws};}
+function generateAllMaps(seed){const rng=createRNG(seed);const maps=[],mons=[],its=[],hws=[];for(let f=0;f<5;f++){const map=Array.from({length:11},()=>Array(11).fill(0));for(let i=0;i<11;i++)map[0][i]=map[10][i]=map[i][0]=map[i][10]=1;divideMaze(map,1,1,9,9,rng);map[9][5]=0;for(const[dxx,dyy]of[[0,-1],[0,1],[-1,0],[1,0]]){const ax=5+dxx,ay=9+dyy;if(ax>=1&&ax<10&&ay>=1&&ay<10)map[ay][ax]=0;}const cand=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0&&!(x===5&&y===9))cand.push([x,y]);cand.sort((a,b)=>(Math.abs(b[0]-5)+Math.abs(b[1]-9))-(Math.abs(a[0]-5)+Math.abs(a[1]-9)));const[sx,sy]=cand.length?cand[Math.floor(rng()*Math.min(5,cand.length))]:[4,8];if(f!==4)map[sy][sx]=9;ensurePath(map,5,9,sx,sy,rng);if(f!==4)for(const[dxx,dyy]of[[0,-1],[0,1],[-1,0],[1,0]]){const ax=sx+dxx,ay=sy+dyy;if(ax>=1&&ax<10&&ay>=1&&ay<10)map[ay][ax]=0;}placeDoors(map,rng,f);if(f>=1&&f<=3){const dt=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0&&!(x===sx&&y===sy))dt.push([x,y]);if(dt.length){const[dx,dy]=dt[Math.floor(rng()*dt.length)];map[dy][dx]=8;for(const[ddx,ddy]of[[0,-1],[0,1],[-1,0],[1,0]]){const ax=dx+ddx,ay=dy+ddy;if(ax>=1&&ax<10&&ay>=1&&ay<10)map[ay][ax]=0;}}else{const fw=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0)fw.push([x,y]);if(fw.length){const[dx,dy]=fw[Math.floor(rng()*fw.length)];map[dy][dx]=8;for(const[ddx,ddy]of[[0,-1],[0,1],[-1,0],[1,0]]){const ax=dx+ddx,ay=dy+ddy;if(ax>=1&&ax<10&&ay>=1&&ay<10)map[ay][ax]=0;}}}}const wl=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0)wl.push([x,y]);const pool=wl.filter(([x,y])=>!(x===5&&y===9)&&!(x===sx&&y===sy));const mc=3+f*2;const ms=[];const mt=f===4?[4,5,6,7]:f>=2?[2,3,4,5]:f>=1?[1,2,3,4]:[1,2];const mpool=[...pool];for(let i=0;i<mc&&mpool.length;i++){const idx=Math.floor(rng()*mpool.length);const[mx,my]=mpool.splice(idx,1)[0];ms.push([mt[Math.floor(rng()*mt.length)],mx,my]);}if(f===4){const bi=ms.findIndex(m=>m[0]===7);if(bi>=0){const bx=ms[bi][1],by=ms[bi][2];if(Math.abs(bx-sx)+Math.abs(by-sy)<4){const pool2=wl.filter(([x,y])=>!(x===sx&&y===sy)&&Math.abs(x-sx)+Math.abs(y-sy)>=4&&!ms.some(m2=>m2[1]===x&&m2[2]===y));if(pool2.length){const[nx,ny]=pool2[Math.floor(rng()*pool2.length)];ms[bi][1]=nx;ms[bi][2]=ny;}}}}const id=[['rg','rp','yk','yk','bk'],['bg','rg','rp','bp','yk','yk','yk','bk'],['rg','rg','bg','bg','rp','rp','bp','yk','yk','yk','bk','rk'],['rg','rg','bg','bg','rp','rp','bp','bp','yk','yk','yk','yk','bk','bk','rk'],['rg','rg','rg','bg','bg','bg','rp','rp','rp','bp','bp','yk','yk','yk','bk','rk']];const items=[];const defs=id[Math.min(f,4)];const ipool=[...pool];for(const[mtp,mx,my]of ms){const mi=ipool.findIndex(([x,y])=>x===mx&&y===my);if(mi>=0)ipool.splice(mi,1);}for(let i=0;i<defs.length&&ipool.length;i++){const idx=Math.floor(rng()*ipool.length);const[ix,iy]=ipool.splice(idx,1)[0];items.push([defs[i],ix,iy]);}if(rng()<0.6){const wt=[];for(let y=2;y<9;y++)for(let x=2;x<9;x++)if(map[y][x]===1)wt.push([x,y]);if(wt.length){const[wx,wy]=wt[Math.floor(rng()*wt.length)];hws.push([f,wx,wy]);}}const ec=f===4?2:Math.floor(rng()*2);const eqKeys=Object.keys(EQUIPMENT);for(let i=0;i<ec;i++){const eqId=eqKeys[Math.floor(rng()*eqKeys.length)];const rp=[...ipool];const cp=rp[Math.floor(rng()*rp.length)];if(cp){items.push(['tr',eqId,cp[0],cp[1]]);ipool.splice(ipool.findIndex(([x,y])=>x===cp[0]&&y===cp[1]),1);}}maps.push(map);mons.push(ms);its.push(items);}for(let f=0;f<3;f++){let ux=-1,uy=-1;for(let y=0;y<11;y++)for(let x=0;x<11;x++)if(maps[f][y][x]===9){ux=x;uy=y;break;}for(let y=0;y<11;y++)for(let x=0;x<11;x++)if(maps[f+1][y][x]===8){maps[f+1][y][x]=0;break;}if(ux>=0){maps[f+1][uy][ux]=0;maps[f+1][uy][ux]=8;}}for(let f=1;f<=3;f++){let dfound=false;for(let y=0;y<11;y++)for(let x=0;x<11;x++)if(maps[f][y][x]===8)dfound=true;if(!dfound){for(let y=2;y<9;y++){let placed=false;for(let x=2;x<9;x++){if(maps[f][y][x]===0){maps[f][y][x]=8;placed=true;break;}}if(placed)break;}}}for(let f=0;f<4;f++){let fsx=-1,fsy=-1;for(let y=0;y<11;y++)for(let x=0;x<11;x++)if(maps[f][y][x]===9){fsx=x;fsy=y;break;}if(fsx<0){for(let y=1;y<10;y++){let found=false;for(let x=1;x<10;x++)if(maps[f][y][x]===0){maps[f][y][x]=9;fsx=x;fsy=y;found=true;break;}if(found)break;}}if(fsx<0&&maps[f][9][4]===0)maps[f][9][4]=9;}{let eqPlaced=false,kyPlaced=false;const sf=[1,2,3];for(let ti=sf.length-1;ti>0;ti--){const j=Math.floor(rng()*(ti+1));[sf[ti],sf[j]]=[sf[j],sf[ti]];}for(const f of sf){if(!eqPlaced){for(let y=2;y<9;y++){let p=false;for(let x=2;x<9;x++){if(maps[f][y][x]===0){its[f].push(['eq',x,y]);eqPlaced=true;p=true;break;}}if(p)break;}}if(!kyPlaced){for(let y=2;y<9;y++){let p=false;for(let x=2;x<9;x++){if(maps[f][y][x]===0&&!its[f].some(it=>it[0]==='eq'&&it[it.length-2]===x&&it[it.length-1]===y)){its[f].push(['ky',x,y]);kyPlaced=true;p=true;break;}}if(p)break;}}if(eqPlaced&&kyPlaced)break;}}for(let lf=0;lf<5;lf++){let lups=-1,lupsy=-1,ldns=-1,ldnsy=-1,dmc=0,ic=0;for(let y=0;y<11;y++)for(let x=0;x<11;x++){const t=maps[lf][y][x];if(t===9){lups=x;lupsy=y;}if(t===8){ldns=x;ldnsy=y;}}for(let y=0;y<11;y++)for(let x=0;x<11;x++){if(maps[lf][y][x]>=2&&maps[lf][y][x]<=4)dmc++;}ic=its[lf].length;console.debug(`[gen] F${lf+1} up(${lups},${lupsy}) dn(${ldns},${ldnsy}) doors:${dmc} items:${ic} mons:${mons[lf].length}`);gameLogEvent('gen', `F${lf+1} UP(${lups},${lupsy}) DN(${ldns},${ldnsy}) mons:[${mons[lf].map(m=>'('+m[0]+'@'+m[1]+','+m[2]+')').join(',')}] items:[${its[lf].map(it=>it[0]+'@('+it[it.length-2]+','+it[it.length-1]+')').join(',')}]`);}for(let ff=0;ff<5;ff++){mons[ff]=mons[ff].filter(m=>{const mx=m[1],my=m[2];return maps[ff][my][mx]===0;});its[ff]=its[ff].filter(it=>{const ix=it[it.length-2],iy=it[it.length-1];return maps[ff][iy][ix]===0||it[0]==='eq'||it[0]==='ky';});}return{maps,monsters:mons,items:its,hiddenWalls:hws};}
 
 // Click equipped slot to unequip
 document.addEventListener('click', (e) => {
@@ -2136,8 +2187,8 @@ document.addEventListener('dblclick', (e) => {
     state.weapon = null;
   }
   state[slot] = eq;
-  state.equipInv.splice(idx, 1);
-  updateHUD();
+  if (slot === 'armor' && eq.maxHp) { state.maxHp += eq.maxHp; state.hp = Math.min(state.hp + eq.maxHp, state.maxHp); }
+  state.equipInv.splice(idx, 1); updateHUD();
   showMessage(`装备 ${eq.icon} ${eq.name}`, false); gameLogEvent('equip', `equip ${eq.name} slot=${slot}`);
 });
 
