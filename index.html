@@ -1243,9 +1243,10 @@ function doBattle(mx, my) {
   state.gold += m.gold;
   state.monstersKilled++;
   
-  // Animate battle log
+  // Animate battle log (skip float text when quick-battle is ON)
   battleAnimating = true;
-  animateBattleLog(log, info.mesh, () => {
+  if (quickBattle) {
+    // Quick battle: skip animation, apply results immediately
     defeatedThisFloor.add(fk(mx, my));
     delete monsterMeshes[key(mx, my)];
     dynGroup.remove(info.mesh);
@@ -1261,7 +1262,25 @@ function doBattle(mx, my) {
       showMessage(`🎁 Boss掉落: ${EQUIPMENT[dropId].icon} ${EQUIPMENT[dropId].name}`, false);
     }
     if (state.hp <= 0) showGameOver();
-  });
+  } else {
+    animateBattleLog(log, info.mesh, () => {
+      defeatedThisFloor.add(fk(mx, my));
+      delete monsterMeshes[key(mx, my)];
+      dynGroup.remove(info.mesh);
+      battleAnimating = false;
+      updateHUD(); updateMinimap(); updateMonsterLabels();
+      showMessage(`击败${m.name}！损失 ${loss} HP`, false);
+      if (info.type === 7 && state.floor === MAPS.length - 1) {
+        setTimeout(() => document.getElementById('victory-overlay').classList.add('active'), 600);
+      }
+      if (info.type === 7) {
+        const dropId = BOSS_DROPS[Math.floor(Math.random()*BOSS_DROPS.length)];
+        state.equipInv.push(dropId);
+        showMessage(`🎁 Boss掉落: ${EQUIPMENT[dropId].icon} ${EQUIPMENT[dropId].name}`, false);
+      }
+      if (state.hp <= 0) showGameOver();
+    });
+  }
 }
 
 let battleAnimating = false;
@@ -1425,8 +1444,8 @@ function pickupItems(x, y) {
   let msg = '';
 
   switch (itype) {
-    case ITEM.RED_GEM:   state.baseAtk += 3; msg = '获得红宝石！攻击力 +3'; inventory.push({icon:'💎',name:'红宝石+3ATK'}); break;
-    case ITEM.BLUE_GEM:  state.baseDef += 3; msg = '获得蓝宝石！防御力 +3'; inventory.push({icon:'💠',name:'蓝宝石+3DEF'}); break;
+    case ITEM.RED_GEM:   state.baseAtk += 3; msg = '获得红宝石！攻击力 +3'; break;
+    case ITEM.BLUE_GEM:  state.baseDef += 3; msg = '获得蓝宝石！防御力 +3'; break;
     case ITEM.RED_POTION:  state.hp = Math.min(state.hp + 100, state.maxHp); state.maxHp = Math.max(state.maxHp, state.hp); msg = '获得红血瓶！生命 +100'; inventory.push({icon:'🧪',name:'红血瓶+100HP'}); break;
     case ITEM.BLUE_POTION: state.hp = Math.min(state.hp + 500, state.maxHp); state.maxHp = Math.max(state.maxHp, state.hp); msg = '获得蓝血瓶！生命 +500'; inventory.push({icon:'🧪',name:'蓝血瓶+500HP'}); break;
     case ITEM.YELLOW_KEY: state.yellowKeys++; msg = '获得黄钥匙'; inventory.push({icon:'🔑',name:'黄钥匙'}); break;
@@ -1485,17 +1504,16 @@ function goToFloor(newFloor) {
   state.floor = newFloor;
 
   // Spawn at matching stair position on target floor
-  if (newFloor === 0) {
-    state.px = FLOOR_0_START[0];
-    state.py = FLOOR_0_START[1];
-  } else if (wasGoingUp) {
+  if (wasGoingUp) {
     // Going UP: appear at target floor's STAIR_DOWN
     const pos = findStairPos(newFloor, TILE.STAIR_DOWN);
-    state.px = pos[0]; state.py = pos[1];
+    state.px = pos ? pos[0] : FLOOR_0_START[0];
+    state.py = pos ? pos[1] : FLOOR_0_START[1];
   } else {
     // Going DOWN: appear at target floor's STAIR_UP
     const pos = findStairPos(newFloor, TILE.STAIR_UP);
-    state.px = pos[0]; state.py = pos[1];
+    state.px = pos ? pos[0] : FLOOR_0_START[0];
+    state.py = pos ? pos[1] : FLOOR_0_START[1];
   }
 
   const trans = document.getElementById('floor-transition');
@@ -2081,6 +2099,7 @@ document.addEventListener('keydown', (e) => {
     state.gold = 0;
     state.yellowKeys = 1; state.blueKeys = 0; state.redKeys = 0;
     state.steps = 0; state.monstersKilled = 0;
+    state.weapon = null; state.shield = null; state.armor = null; state.equipInv = [];
     defeatedThisFloor = new Set();
     pickedItems = new Set();
     openedChests = new Set();
