@@ -158,6 +158,20 @@
   #victory-overlay h1 { font-size: 36px; color: var(--accent); }
   #victory-overlay p { color: var(--text); font-size: 15px; }
 
+  #gameover-overlay {
+    position: fixed; inset: 0;
+    background: rgba(10,0,0,0.88);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 210;
+    flex-direction: column;
+    gap: 12px;
+  }
+  #gameover-overlay.active { display: flex; }
+  #gameover-overlay h1 { font-size: 36px; color: #f38ba8; }
+  #gameover-stats { color: var(--text); font-size: 14px; text-align: center; line-height: 1.8; }
+
     #seed-panel {
     position: fixed; bottom: 28px; left: 185px;
     background: var(--panel-bg);
@@ -178,6 +192,15 @@
     font-size: 10px; color: #585b70;
     z-index: 10;
     pointer-events: none;
+  }
+  .monster-hp-label {
+    position: fixed;
+    font-size: 11px; font-weight: bold;
+    font-family: monospace;
+    pointer-events: none;
+    z-index: 20;
+    text-shadow: 0 0 4px rgba(0,0,0,0.9);
+    transform: translate(-50%, -50%);
   }
   #floor-transition {
     position: fixed; inset: 0;
@@ -263,6 +286,12 @@
   <h1>🏆 通关！</h1>
   <p>你击败了魔王，拯救了公主！</p>
   <button class="btn-fight" onclick="location.reload()" style="font-size:14px;padding:10px 28px;border-radius:8px;cursor:pointer;background:#f38ba8;color:#1e1e2e;border:none;font-weight:600;">重新开始</button>
+</div>
+
+<div id="gameover-overlay">
+  <h1>💀 你倒下了</h1>
+  <div id="gameover-stats"></div>
+  <button onclick="location.reload()" style="font-size:14px;padding:10px 28px;border-radius:8px;cursor:pointer;background:#f38ba8;color:#1e1e2e;border:none;font-weight:600;margin-top:16px;">重新开始</button>
 </div>
 
 <script type="importmap">
@@ -1149,7 +1178,6 @@ function doBattle(mx, my) {
   }
   
   loss = state.hp - Math.max(0, pHp);
-  if (pHp <= 0) { showMessage('⚠️ 战斗力不足！', true); return; }
   
   state.hp = Math.max(0, pHp);
   state.gold += m.gold;
@@ -1172,7 +1200,7 @@ function doBattle(mx, my) {
       state.equipInv.push(dropId);
       showMessage(`🎁 Boss掉落: ${EQUIPMENT[dropId].icon} ${EQUIPMENT[dropId].name}`, false);
     }
-    if (state.hp <= 0) setTimeout(() => alert('💀 你倒下了...'), 500);
+    if (state.hp <= 0) showGameOver();
   });
 }
 
@@ -1217,6 +1245,19 @@ function updateMonsterLabels() {
     el.style.cssText = `left:${sx}px;top:${sy-24}px`;
     document.body.appendChild(el);
   }
+}
+
+function showGameOver() {
+  const s = getStats();
+  const score = state.monstersKilled * 150 + state.gold * 12 + s.atk * 8 + s.def * 8 + state.hp - state.steps * 5;
+  const grade = score >= 5000 ? 'S' : score >= 3000 ? 'A' : score >= 1500 ? 'B' : score >= 500 ? 'C' : 'D';
+  document.getElementById('gameover-stats').innerHTML = `
+    到达第 <b style="color:var(--accent)">${state.floor + 1}</b> 层<br>
+    步数: <b>${state.steps}</b> &nbsp; 击杀: <b>${state.monstersKilled}</b><br>
+    金币: <b>${state.gold}</b> &nbsp; ATK: <b>${s.atk}</b> &nbsp; DEF: <b>${s.def}</b><br>
+    <div style="font-size:24px;font-weight:bold;color:var(--accent);margin-top:8px;">评分: ${grade}</div>
+  `;
+  document.getElementById('gameover-overlay').classList.add('active');
 }
 
 function canWalk(x, y) {
@@ -1282,6 +1323,7 @@ function moveTo(nx, ny) {
   if (isHiddenWall(state.floor, nx, ny)) {
     showMessage('🔍 发现了隐藏通道！', false);
   }
+  updateHUD();
 }
 
 function removeDoor(x, y) {
@@ -1562,6 +1604,7 @@ function handleInput() {
   if (isMoving) return;
   if (document.getElementById('battle-overlay').classList.contains('active')) return;
   if (document.getElementById('victory-overlay').classList.contains('active')) return;
+  if (document.getElementById('gameover-overlay').classList.contains('active')) return;
 
   let dx = 0, dy = 0;
   if (keys['ArrowUp'] || keys['w'] || keys['W']) dy = -1;
@@ -1748,20 +1791,7 @@ function createRNG(seed){let s=hashStr(String(seed));return function(){s|=0;s=s+
 function ensurePath(map,sx,sy,ex,ey,rng){const v=Array.from({length:11},()=>Array(11).fill(false));const q=[[sx,sy]];v[sy][sx]=true;while(q.length){const[cx,cy]=q.shift();for(const[dx,dy]of[[0,-1],[0,1],[-1,0],[1,0]]){const nx=cx+dx,ny=cy+dy;if(nx<0||nx>=11||ny<0||ny>=11||v[ny][nx])continue;if(map[ny][nx]===1)continue;v[ny][nx]=true;q.push([nx,ny]);}}if(!v[ey][ex]){let cx=sx,cy=sy;for(let s=0;s<100&&!(cx===ex&&cy===ey);s++){const dx=Math.sign(ex-cx),dy=Math.sign(ey-cy);let m=false;for(const[ddx,ddy]of[[dx,0],[0,dy],[dx,dy]]){const nx=cx+ddx,ny=cy+ddy;if(nx>=1&&nx<10&&ny>=1&&ny<10){if(map[ny][nx]===1){map[ny][nx]=0;m=true;cx=nx;cy=ny;break;}if(ddx||ddy){cx=nx;cy=ny;m=true;break;}}}if(!m)break;}}}
 function placeDoors(map,rng,fn){const n=2+Math.floor(rng()*3);for(let i=0;i<n;i++){const c=[];for(let y=2;y<9;y++)for(let x=2;x<9;x++){if(map[y][x]!==0)continue;const nW=map[y-1][x]===1,sW=map[y+1][x]===1,eW=map[y][x+1]===1,wW=map[y][x-1]===1;if((nW&&sW&&!eW&&!wW)||(eW&&wW&&!nW&&!sW))c.push([x,y]);}if(!c.length)break;const[dx,dy]=c[Math.floor(rng()*c.length)];const dt=fn>=3?(rng()<0.4?4:rng()<0.5?3:2):fn>=1?(rng()<0.5?3:2):2;map[dy][dx]=dt;}}
 function divideMaze(map,x1,y1,x2,y2,rng){const w=x2-x1;const h=y2-y1;if(w<2||h<2)return;let horizontal;if(w>h*1.5)horizontal=true;else if(h>w*1.5)horizontal=false;else horizontal=rng()<0.5;if(horizontal){let wallY=y1+1+Math.floor(rng()*(y2-y1-1));if(wallY<=y1)wallY=y1+1;if(wallY>=y2)wallY=y2-1;const gapX=x1+Math.floor(rng()*(x2-x1+1));for(let x=x1;x<=x2;x++){if(x!==gapX)map[wallY][x]=1;}if(rng()<0.25){const g2=x1+Math.floor(rng()*(x2-x1+1));if(g2!==gapX)map[wallY][g2]=0;}divideMaze(map,x1,y1,x2,wallY-1,rng);divideMaze(map,x1,wallY+1,x2,y2,rng);}else{let wallX=x1+1+Math.floor(rng()*(x2-x1-1));if(wallX<=x1)wallX=x1+1;if(wallX>=x2)wallX=x2-1;const gapY=y1+Math.floor(rng()*(y2-y1+1));for(let y=y1;y<=y2;y++){if(y!==gapY)map[y][wallX]=1;}if(rng()<0.25){const g2=y1+Math.floor(rng()*(y2-y1+1));if(g2!==gapY)map[g2][wallX]=0;}divideMaze(map,x1,y1,wallX-1,y2,rng);divideMaze(map,wallX+1,y1,x2,y2,rng);}}
-function generateAllMaps(seed){const rng=createRNG(seed);const maps=[],mons=[],its=[],hws=[];for(let f=0;f<5;f++){const map=Array.from({length:11},()=>Array(11).fill(0));for(let i=0;i<11;i++)map[0][i]=map[10][i]=map[i][0]=map[i][10]=1;divideMaze(map,1,1,9,9,rng);
-  // Clear spawn area and ensure adjacency
-  map[9][5]=0;
-  for(const[dxx,dyy]of[[0,-1],[0,1],[-1,0],[1,0]]){
-    const ax=5+dxx,ay=9+dyy;
-    if(ax>=1&&ax<10&&ay>=1&&ay<10)map[ay][ax]=0;
-  }const cand=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0&&!(x===5&&y===9))cand.push([x,y]);cand.sort((a,b)=>(Math.abs(b[0]-5)+Math.abs(b[1]-9))-(Math.abs(a[0]-5)+Math.abs(a[1]-9)));const[sx,sy]=cand[Math.floor(rng()*Math.min(5,cand.length))]||cand[0];map[sy][sx]=9;ensurePath(map,5,9,sx,sy,rng);for(const[dxx,dyy]of[[0,-1],[0,1],[-1,0],[1,0]]){const ax=sx+dxx,ay=sy+dyy;if(ax>=1&&ax<10&&ay>=1&&ay<10)map[ay][ax]=0;}placeDoors(map,rng,f);if(f>=1&&f<=3){const dt=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0&&!(x===sx&&y===sy))dt.push([x,y]);if(dt.length){const[dx,dy]=dt[Math.floor(rng()*dt.length)];map[dy][dx]=8;for(const[ddx,ddy]of[[0,-1],[0,1],[-1,0],[1,0]]){const ax=dx+ddx,ay=dy+ddy;if(ax>=1&&ax<10&&ay>=1&&ay<10)map[ay][ax]=0;}}if(f===4){const dt=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0)dt.push([x,y]);if(dt.length){const[dx,dy]=dt[Math.floor(rng()*dt.length)];map[dy][dx]=8;for(const[ddx,ddy]of[[0,-1],[0,1],[-1,0],[1,0]]){const ax=dx+ddx,ay=dy+ddy;if(ax>=1&&ax<10&&ay>=1&&ay<10)map[ay][ax]=0;}}const wl=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0)wl.push([x,y]);const pool=wl.filter(([x,y])=>!(x===5&&y===9)&&!(x===sx&&y===sy));const mc=3+f*2;const ms=[];const mt=f===4?[4,5,6,7]:f>=2?[2,3,4,5]:f>=1?[1,2,3,4]:[1,2];const mpool=[...pool];for(let i=0;i<mc&&mpool.length;i++){const idx=Math.floor(rng()*mpool.length);const[mx,my]=mpool.splice(idx,1)[0];ms.push([mt[Math.floor(rng()*mt.length)],mx,my]);}const id=[['rg','rp','yk','yk','bk'],['bg','rg','rp','bp','yk','yk','yk','bk'],['rg','rg','bg','bg','rp','rp','bp','yk','yk','yk','bk','rk'],['rg','rg','bg','bg','rp','rp','bp','bp','yk','yk','yk','yk','bk','bk','rk'],['rg','rg','rg','bg','bg','bg','rp','rp','rp','bp','bp','yk','yk','yk','bk','rk']];const items=[];const defs=id[Math.min(f,4)];const ipool=[...wl].filter(([x,y])=>!(x===5&&y===9)&&!(x===sx&&y===sy));for(let i=0;i<defs.length&&ipool.length;i++){const idx=Math.floor(rng()*ipool.length);const[ix,iy]=ipool.splice(idx,1)[0];items.push([defs[i],ix,iy]);}if(rng()<0.6){const wt=[];for(let y=2;y<9;y++)for(let x=2;x<9;x++)if(map[y][x]===1)wt.push([x,y]);if(wt.length){const[wx,wy]=wt[Math.floor(rng()*wt.length)];hws.push([f,wx,wy]);}}maps.push(map);mons.push(ms);its.push(items);}}}return{maps,monsters:mons,items:its,hiddenWalls:hws};}
-
-
-// ============================================================
-// CHEST & EQUIPMENT
-// ============================================================
-
-let openedChests = new Set();
+function generateAllMaps(seed){const rng=createRNG(seed);const maps=[],mons=[],its=[],hws=[];for(let f=0;f<5;f++){const map=Array.from({length:11},()=>Array(11).fill(0));for(let i=0;i<11;i++)map[0][i]=map[10][i]=map[i][0]=map[i][10]=1;divideMaze(map,1,1,9,9,rng);map[9][5]=0;for(const[dxx,dyy]of[[0,-1],[0,1],[-1,0],[1,0]]){const ax=5+dxx,ay=9+dyy;if(ax>=1&&ax<10&&ay>=1&&ay<10)map[ay][ax]=0;}const cand=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0&&!(x===5&&y===9))cand.push([x,y]);cand.sort((a,b)=>(Math.abs(b[0]-5)+Math.abs(b[1]-9))-(Math.abs(a[0]-5)+Math.abs(a[1]-9)));const[sx,sy]=cand[Math.floor(rng()*Math.min(5,cand.length))]||cand[0];map[sy][sx]=9;ensurePath(map,5,9,sx,sy,rng);for(const[dxx,dyy]of[[0,-1],[0,1],[-1,0],[1,0]]){const ax=sx+dxx,ay=sy+dyy;if(ax>=1&&ax<10&&ay>=1&&ay<10)map[ay][ax]=0;}placeDoors(map,rng,f);if(f>=1&&f<=3){const dt=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0&&!(x===sx&&y===sy))dt.push([x,y]);if(dt.length){const[dx,dy]=dt[Math.floor(rng()*dt.length)];map[dy][dx]=8;for(const[ddx,ddy]of[[0,-1],[0,1],[-1,0],[1,0]]){const ax=dx+ddx,ay=dy+ddy;if(ax>=1&&ax<10&&ay>=1&&ay<10)map[ay][ax]=0;}}}if(f===4){const dt=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0)dt.push([x,y]);if(dt.length){const[dx,dy]=dt[Math.floor(rng()*dt.length)];map[dy][dx]=8;for(const[ddx,ddy]of[[0,-1],[0,1],[-1,0],[1,0]]){const ax=dx+ddx,ay=dy+ddy;if(ax>=1&&ax<10&&ay>=1&&ay<10)map[ay][ax]=0;}}}const wl=[];for(let y=1;y<10;y++)for(let x=1;x<10;x++)if(map[y][x]===0)wl.push([x,y]);const pool=wl.filter(([x,y])=>!(x===5&&y===9)&&!(x===sx&&y===sy));const mc=3+f*2;const ms=[];const mt=f===4?[4,5,6,7]:f>=2?[2,3,4,5]:f>=1?[1,2,3,4]:[1,2];const mpool=[...pool];for(let i=0;i<mc&&mpool.length;i++){const idx=Math.floor(rng()*mpool.length);const[mx,my]=mpool.splice(idx,1)[0];ms.push([mt[Math.floor(rng()*mt.length)],mx,my]);}const id=[['rg','rp','yk','yk','bk'],['bg','rg','rp','bp','yk','yk','yk','bk'],['rg','rg','bg','bg','rp','rp','bp','yk','yk','yk','bk','rk'],['rg','rg','bg','bg','rp','rp','bp','bp','yk','yk','yk','yk','bk','bk','rk'],['rg','rg','rg','bg','bg','bg','rp','rp','rp','bp','bp','yk','yk','yk','bk','rk']];const items=[];const defs=id[Math.min(f,4)];const ipool=[...wl].filter(([x,y])=>!(x===5&&y===9)&&!(x===sx&&y===sy));for(let i=0;i<defs.length&&ipool.length;i++){const idx=Math.floor(rng()*ipool.length);const[ix,iy]=ipool.splice(idx,1)[0];items.push([defs[i],ix,iy]);}if(rng()<0.6){const wt=[];for(let y=2;y<9;y++)for(let x=2;x<9;x++)if(map[y][x]===1)wt.push([x,y]);if(wt.length){const[wx,wy]=wt[Math.floor(rng()*wt.length)];hws.push([f,wx,wy]);}}maps.push(map);mons.push(ms);its.push(items);}return{maps,monsters:mons,items:its,hiddenWalls:hws};}
 
 function openChestIfPresent(x, y) {
   for (const c of CHESTS) {
@@ -1863,6 +1893,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'g' || e.key === 'G') {
     if (document.getElementById('battle-overlay').classList.contains('active')) return;
     if (document.getElementById('victory-overlay').classList.contains('active')) return;
+    if (document.getElementById('gameover-overlay').classList.contains('active')) return;
     const newSeed = Date.now().toString(36).slice(-6);
     regenerateMaps(newSeed);
     state.floor = 0;
