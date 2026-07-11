@@ -241,9 +241,18 @@
   <div class="stat def"><span class="label">🛡️ 防御</span><span class="val" id="def-val">10</span></div>
   <div class="stat gold"><span class="label">💰 金币</span><span class="val" id="gold-val">0</span></div>
   <div class="keys">
-    <div class="key"><span class="key-dot yellow"></span> <span id="yk-val">1</span></div>
-    <div class="key"><span class="key-dot blue"></span> <span id="bk-val">0</span></div>
-    <div class="key"><span class="key-dot red"></span> <span id="rk-val">0</span></div>
+    <div class="key"><span class="key-dot yellow"></span> 🟡黄 <span id="yk-val">1</span></div>
+    <div class="key"><span class="key-dot blue"></span> 🔵蓝 <span id="bk-val">0</span></div>
+    <div class="key"><span class="key-dot red"></span> 🔴红 <span id="rk-val">0</span></div>
+  </div>
+  <div class="stat" style="margin-top:4px;padding-top:4px;border-top:1px solid var(--border);">
+    <span class="label">⏱ 攻速</span><span class="val" id="spd-val" style="color:#a6adc8;">1.0</span>
+  </div>
+  <div class="stat">
+    <span class="label">💥 暴击率</span><span class="val" id="crt-val" style="color:#a6adc8;">5%</span>
+  </div>
+  <div class="stat">
+    <span class="label">🎯 暴伤</span><span class="val" id="cdm-val" style="color:#a6adc8;">1.5x</span>
   </div>
   <div class="stat" style="margin-top:4px;padding-top:4px;border-top:1px solid var(--border);">
     <span class="label">👟 步数</span><span class="val" id="steps-val" style="color:#a6adc8;">0</span>
@@ -534,6 +543,10 @@ let currentItems = [];
 let defeatedThisFloor = new Set(); // key: "floor,x,y" for cross-floor persistence
 let pickedItems = new Set(); // key: "floor,x,y"
 function fk(x, y) { return `${state.floor},${x},${y}`; }
+function removeFromInventory(name) {
+  const idx = inventory.findIndex(i => i.name === name);
+  if (idx >= 0) inventory.splice(idx, 1);
+}
 
 // Inventory & history
 const inventory = []; // collected item icons
@@ -1386,14 +1399,17 @@ function moveTo(nx, ny) {
   // Handle door opening
   if (walkResult === 'yellow_door') {
     state.yellowKeys--;
+    removeFromInventory('黄钥匙');
     MAPS[state.floor][ny][nx] = TILE.FLOOR;
     removeDoor(nx, ny);
   } else if (walkResult === 'blue_door') {
     state.blueKeys--;
+    removeFromInventory('蓝钥匙');
     MAPS[state.floor][ny][nx] = TILE.FLOOR;
     removeDoor(nx, ny);
   } else if (walkResult === 'red_door') {
     state.redKeys--;
+    removeFromInventory('红钥匙');
     MAPS[state.floor][ny][nx] = TILE.FLOOR;
     removeDoor(nx, ny);
   }
@@ -1582,6 +1598,10 @@ function updateHUD() {
   document.getElementById('hp-val').textContent = state.hp;
   document.getElementById('atk-val').textContent = getStats().atk;
   document.getElementById('def-val').textContent = getStats().def;
+  const s = getStats();
+  document.getElementById('spd-val').textContent = s.atkSpeed.toFixed(2);
+  document.getElementById('crt-val').textContent = Math.round(s.critRate * 100) + '%';
+  document.getElementById('cdm-val').textContent = s.critDmg.toFixed(1) + 'x';
   document.getElementById('gold-val').textContent = state.gold;
   document.getElementById('yk-val').textContent = state.yellowKeys;
   document.getElementById('bk-val').textContent = state.blueKeys;
