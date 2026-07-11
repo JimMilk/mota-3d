@@ -1276,8 +1276,7 @@ function doBattle(mx, my) {
     delete monsterMeshes[key(mx, my)];
     dynGroup.remove(info.mesh);
     battleAnimating = false;
-    updateHUD(); updateMinimap(); updateMonsterLabels(); gameLogEvent('move', `(${nx},${ny}) →(${walkResult}) F${state.floor}`);
-    showMessage(`击败${m.name}！损失 ${loss} HP`, false);
+    updateHUD(); updateMinimap(); updateMonsterLabels(); showMessage(`击败${m.name}！损失 ${loss} HP`, false);
     if (info.type === 7 && state.floor === MAPS.length - 1) {
       setTimeout(() => document.getElementById('victory-overlay').classList.add('active'), 600);
     }
@@ -1520,6 +1519,7 @@ function moveTo(nx, ny) {
   }
 
   if (walkResult === 'monster') {
+    state.px = nx; state.py = ny;
     doBattle(nx, ny);
     return;
   }
