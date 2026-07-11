@@ -36,7 +36,7 @@
     padding: 14px 14px;
     backdrop-filter: blur(12px);
     z-index: 10;
-    pointer-events: none;
+    pointer-events: auto;
     font-size: 12px;
     display: flex;
     flex-direction: column;
@@ -144,7 +144,7 @@
     z-index: 20;
     opacity: 0;
     transition: opacity 0.3s;
-    pointer-events: none;
+    pointer-events: auto;
   }
   #message.show { opacity: 1; }
   #message.warn { color: var(--danger); border-color: var(--danger); }
@@ -196,13 +196,13 @@
     position: fixed; bottom: 10px; left: 185px;
     font-size: 10px; color: #585b70;
     z-index: 10;
-    pointer-events: none;
+    pointer-events: auto;
   }
   .monster-hp-label {
     position: fixed;
     font-size: 11px; font-weight: bold;
     font-family: monospace;
-    pointer-events: none;
+    pointer-events: auto;
     z-index: 20;
     text-shadow: 0 0 4px rgba(0,0,0,0.9);
     transform: translate(-50%, -50%);
@@ -211,7 +211,7 @@
     position: fixed;
     font-family: monospace;
     font-weight: bold;
-    pointer-events: none;
+    pointer-events: auto;
     z-index: 25;
     text-shadow: 0 1px 3px rgba(0,0,0,0.9);
     transition: transform 0.9s ease-out, opacity 0.9s ease-out;
@@ -1273,7 +1273,7 @@ function doBattle(mx, my) {
     delete monsterMeshes[key(mx, my)];
     dynGroup.remove(info.mesh);
     battleAnimating = false;
-    updateHUD(); updateMinimap(); updateMonsterLabels();
+    updateHUD(); updateMinimap(); updateMonsterLabels(); gameLogEvent('move', `(${nx},${ny}) →(${walkResult}) F${state.floor}`);
     showMessage(`击败${m.name}！损失 ${loss} HP`, false);
     if (info.type === 7 && state.floor === MAPS.length - 1) {
       setTimeout(() => document.getElementById('victory-overlay').classList.add('active'), 600);
@@ -1291,13 +1291,13 @@ function doBattle(mx, my) {
     }
     if (state.hp <= 0) showGameOver();
   } else {
-    animateBattleLog(log, info.mesh, () => {
+    gameLogEvent('battle', `vs ${m.name} HP${m.hp} ATK${m.atk} DEF${m.def} F${state.floor}`); animateBattleLog(log, info.mesh, () => {
       defeatedThisFloor.add(fk(mx, my));
       delete monsterMeshes[key(mx, my)];
       dynGroup.remove(info.mesh);
       battleAnimating = false;
-      updateHUD(); updateMinimap(); updateMonsterLabels();
-      showMessage(`击败${m.name}！损失 ${loss} HP`, false); gameLogEvent('combat', `beat ${m.name} loss${loss}HP`);
+      updateHUD(); updateMinimap(); updateMonsterLabels(); gameLogEvent('move', `(${nx},${ny}) →(${walkResult}) F${state.floor}`);
+      showMessage(`击败${m.name}！损失 ${loss} HP`, false); gameLogEvent('combat', `beat ${m.name} loss${loss}HP gold+${m.gold} kills+1`);
       if (info.type === 7 && state.floor === 4) { MAPS[4][my][mx] = 9; const bpos=gridToWorld(mx,my); const bstair=createStairMesh(9, mx, my); bstair.position.set(bpos.x,0,bpos.z); dynGroup.add(bstair); showMessage('👑 Boss已死！通向胜利的阶梯出现', false); }
       if (info.type === 7 && state.floor === MAPS.length - 1) {
         setTimeout(() => document.getElementById('victory-overlay').classList.add('active'), 600);
@@ -1599,7 +1599,7 @@ function goToFloor(newFloor) {
   trans.style.display = 'flex';
   setTimeout(() => { trans.style.display = 'none'; }, 800);
 
-  buildFloor();
+  gameLogEvent('init', `Game start: HP${state.hp} ATK${state.baseAtk} DEF${state.baseDef} spd${state.atkSpeed} crit${state.critRate} floor${state.floor+1}`); buildFloor();
   showMessage(`${wasGoingUp ? '⬆' : '⬇'} 进入第 ${newFloor + 1} 层`, false);
   gameLogEvent('floor', `${wasGoingUp ? 'UP' : 'DOWN'} to F${newFloor+1} @ (${state.px},${state.py})`);
 }
@@ -1832,7 +1832,7 @@ window.addEventListener('keydown', e => {
 window.addEventListener('keyup', e => { keys[e.key] = false; });
 
 function handleInput() {
-  if (isMoving) return;
+  if (isMoving || battleAnimating) return;
   if (document.getElementById('battle-overlay').classList.contains('active')) return;
   if (document.getElementById('victory-overlay').classList.contains('active')) return;
   if (document.getElementById('gameover-overlay').classList.contains('active')) return;
@@ -2129,7 +2129,7 @@ document.addEventListener('dblclick', (e) => {
   state[slot] = eq;
   state.equipInv.splice(idx, 1);
   updateHUD();
-  showMessage(`装备 ${eq.icon} ${eq.name}`, false);
+  showMessage(`装备 ${eq.icon} ${eq.name}`, false); gameLogEvent('equip', `equip ${eq.name} slot=${slot}`);
 });
 
 // Single-click equipment to show attributes
@@ -2173,7 +2173,7 @@ function regenerateMaps(seed) {
 // Use random map generation on startup
 regenerateMaps(Date.now().toString(36).slice(-6));
 
-buildFloor();
+gameLogEvent('init', `Game start: HP${state.hp} ATK${state.baseAtk} DEF${state.baseDef} spd${state.atkSpeed} crit${state.critRate} floor${state.floor+1}`); buildFloor();
 updatePlayerLight();
 animate();
 
@@ -2208,7 +2208,7 @@ function gameLogEvent(cat, msg) {
 }
 
     inventory.length = 0; history.length = 0;
-    buildFloor();
+    gameLogEvent('init', `Game start: HP${state.hp} ATK${state.baseAtk} DEF${state.baseDef} spd${state.atkSpeed} crit${state.critRate} floor${state.floor+1}`); buildFloor();
     updateHUD();
     updateMinimap();
     showMessage('🎲 新地图生成！种子: ' + newSeed, false);
