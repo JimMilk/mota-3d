@@ -1608,9 +1608,6 @@ function updateHUD() {
   document.getElementById('cdm-val').textContent = s.critDmg.toFixed(1) + 'x';
   document.getElementById('mis-val').textContent = Math.round(s.missChance * 100) + '%';
   document.getElementById('gold-val').textContent = state.gold;
-  document.getElementById('yk-val').textContent = state.yellowKeys;
-  document.getElementById('bk-val').textContent = state.blueKeys;
-  document.getElementById('rk-val').textContent = state.redKeys;
   document.getElementById('steps-val').textContent = state.steps;
   document.getElementById('kills-val').textContent = state.monstersKilled;
   // Score: rewards efficiency (low steps, high kills+stats+hp)
@@ -1643,15 +1640,6 @@ function updateHUD() {
       el.className = 'eq-slot';
       el.textContent = `${label}: 无`;
     }
-  }
-  // Unequipped gear
-  const einv = document.getElementById('equip-inv');
-  if (einv && state.equipInv.length > 0) {
-    einv.innerHTML = state.equipInv.map((id, i) => {
-      const eq = EQUIPMENT[id];
-      if (!eq) return '';
-      return `<span class="eq-inv-item" data-eq-id="${id}" data-eq-idx="${i}" style="cursor:pointer;margin:0 3px;" title="双击装备 | ${eq.desc}">${eq.icon}</span>`;
-    }).join('');
   }
 
   // History log
