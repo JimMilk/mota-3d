@@ -758,7 +758,7 @@ function buildFloor() {
           ladderGroup.add(pole);
         }
         // Cross rungs
-        for (let i = 0, curMHp = mHp; i < 5; i++) {
+        for (let i = 0; i < 5; i++) {
           const rung = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.38, 6), rungMat);
           rung.rotation.z = Math.PI/2;
           rung.position.set(0, 0.1 + i * 0.14, 0);
@@ -1111,7 +1111,7 @@ function createDynamicStairMesh(x, y) {
   leftPole.position.set(-0.25, pillarH/2, 0); group.add(leftPole);
   const rightPole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, pillarH, 8), mat);
   rightPole.position.set(0.25, pillarH/2, 0); group.add(rightPole);
-  for (let i = 0, curMHp = mHp; i < 5; i++) {
+  for (let i = 0; i < 5; i++) {
     const rung = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.03, 0.06), mat);
     rung.position.set(0, 0.06 + i * 0.07, 0); group.add(rung);
   }
